@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 class Airfoil:
 
     def __init__(self, number_of_points, chord_length, thickness, name):
-        self.msh = 0.01
+        self.msh = 0.1
         self.type = "bezier"
         self.number_of_points = number_of_points
         self.chord_length = chord_length
@@ -113,7 +113,7 @@ class Airfoil:
 
     def get_geo(self, 
                 h : float,
-                type : str = "line"
+                type : str = "bezier"
         ) -> str:
         """
         Creates a .geo file for GMSH from the airfoil points, and returns its file path.
@@ -195,7 +195,7 @@ class Airfoil:
         os.makedirs("meshes", exist_ok=True)
         
         base_name = os.path.basename(input_file).replace(".geo", "")
-        output_file = os.path.join("geo", base_name + ".geo")
+        output_file = os.path.join("meshes", base_name + ".msh")
 
         copy(input_file, output_file)
         msh_output = os.path.join("meshes", base_name + ".msh")
@@ -204,6 +204,8 @@ class Airfoil:
         
         os.system("gmsh " + output_file + " -2 -o " + msh_output)
         print(".msh file generated : {}".format(msh_output))
+
+        return msh_output
 
 
     def gmsh4mtc_single_step(self) -> str :
@@ -237,9 +239,9 @@ class Airfoil:
 
         print("Initialisation...\n")
         input = self.name + ".msh"
-        input_path = os.path.join("meshes", input)
+        input = os.path.join("meshes", input)
         output_filename = self.name + ".t"
-        output_path = os.path.join("t_files", output_filename)
+        output = os.path.join("t_files", output_filename)
 
         with open(input) as f:
             f.readline()
@@ -499,7 +501,7 @@ class Airfoil:
 
 
 #TESTS
-TEST1 = True
+TEST1 = False
 if TEST1:
     airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
@@ -507,12 +509,14 @@ if TEST1:
     airfoil.transform(0, (0.1, 0.0))
     airfoil.plot()
 
-TEST2 = False
+TEST2 = True
 if TEST2:
     airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
     airfoil.plot()
     print(airfoil.get_mesh())
+    print(airfoil.gmsh4mtc_single_step())
+
 
 
 def process_all_meshes():
