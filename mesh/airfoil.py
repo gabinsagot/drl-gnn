@@ -207,6 +207,20 @@ class Airfoil:
         print(".msh file generated : {}".format(msh_output))
 
         return msh_output
+    
+    def get_domain(self):
+        input_file = self.get_t(self.msh, self.type)
+        os.makedirs("t_files", exist_ok=True)
+        
+        base_name = os.path.basename(input_file)
+        output_file = os.path.join("t_files", "domain.t")
+
+        # Run prout.bat
+
+        # Get the last .t file and rename it properly
+
+        # Return path to the file
+        return domain_output
 
 
     def gmsh4mtc_single_step(self, 
