@@ -1,5 +1,6 @@
 import os
 from shutil import copy
+import sys
 import gmsh
 import numpy as np
 import random as rd
@@ -14,7 +15,7 @@ class Airfoil:
         self.chord_length = chord_length
         self.thickness = thickness
         self.points = self.generate_airfoil_points()
-        self.order_points()
+        #self.order_points()
         self.name = name
 
     def generate_airfoil_points(self, random : bool = False):
@@ -174,7 +175,7 @@ class Airfoil:
             f_out.write("Plane Surface(1) = {1};\n")
 
         print("Fichier .geo généré : {}".format(output_file))
-        return output_file 
+        return output_file
     
 
     def rotate(self, angle):
@@ -206,7 +207,9 @@ class Airfoil:
         print(".msh file generated : {}".format(msh_output))
 
 
-    def gmsh4mtc_single_step(self) -> str :
+    def gmsh4mtc_single_step(self, 
+                         output : str
+            ) -> None:
         
         """
         GMSH4MTC
@@ -218,8 +221,6 @@ class Airfoil:
         Fonctionne pour les maillages surfaciques (2D et 3D) et volumiques.
         Uniquement pour les éléments triangulaires, tetrahedriques.
 
-        Peut être drag&drop sur le fichier à transformer (Windows).
-
         maxime.renault@minesparis.psl.eu
         06/2022
 
@@ -227,6 +228,12 @@ class Airfoil:
        
         Convert a GMSH mesh file from version 2 to version 4.
 
+        Args: 
+            input (str): The path to the input .msh file in gmsh format.
+            output (str): The path to the output .t file in mtc format.
+
+        Returns:
+            None
         """
 
         print("#########################################################")
@@ -237,10 +244,6 @@ class Airfoil:
 
         print("Initialisation...\n")
         input = self.name + ".msh"
-        input_path = os.path.join("meshes", input)
-        output_filename = self.name + ".t"
-        output_path = os.path.join("t_files", output_filename)
-
         with open(input) as f:
             f.readline()
             version = f.readline().split()[0]
@@ -494,12 +497,11 @@ class Airfoil:
                     fo.write(str(e[0]) + " " + str(e[1]) + " 0 \n")
 
         print("Done.")
-        #returns the .t file path
-        return output
+        return
 
 
 #TESTS
-TEST1 = True
+TEST1 = False
 if TEST1:
     airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
@@ -507,7 +509,7 @@ if TEST1:
     airfoil.transform(0, (0.1, 0.0))
     airfoil.plot()
 
-TEST2 = False
+TEST2 = True
 if TEST2:
     airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
@@ -543,7 +545,7 @@ def process_all_meshes():
         output_path = os.path.join("t_files", output_filename)
         
         print(f"\nProcessing: {msh_file}")
-        gmsh4mtc_single_step(input_path, output_path)
+        airfoil.gmsh4mtc_single_step(input_path, output_path)
         print(f"Saved: {output_path}\n")
 
 """
