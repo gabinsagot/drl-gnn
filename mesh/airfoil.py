@@ -223,9 +223,7 @@ class Airfoil:
         return domain_output
 
 
-    def gmsh4mtc_single_step(self, 
-                         output : str
-            ) -> None:
+    def get_t(self) -> None:
         
         """
         GMSH4MTC
@@ -259,20 +257,24 @@ class Airfoil:
         print("")
 
         print("Initialisation...\n")
-        input = self.name + ".msh"
-        input = os.path.join("meshes", input)
+        input_filepath = self.name + ".msh"
+        input = os.path.join("meshes", input_filepath)
+        print(input_filepath)
+        print(input)
         output_filename = self.name + ".t"
         output = os.path.join("t_files", output_filename)
 
         with open(input) as f:
             f.readline()
+            """
             version = f.readline().split()[0]
             if len(version) > 1:
                 version = version.split('.')[0]
             if version != '4' and version != '2':
                 print("This version of gmsh isn't supported")
-                input("Press enter to close...")
                 sys.exit()
+            """
+            version = '4'
 
             flags = {"$Nodes": [],
                     "$EndNodes": [],
@@ -538,11 +540,11 @@ if TEST2:
     print(airfoil.gmsh4mtc_single_step())
 
 
-
+"""
 def process_all_meshes():
-    """
-    Process all .msh files from "meshes" folder and save .t files to t_files folder
-    """
+    
+    #Process all .msh files from "meshes" folder and save .t files to t_files folder
+    
     
     # Create t_files folder if it doesn't exist
     os.makedirs("t_files", exist_ok=True)
@@ -570,7 +572,7 @@ def process_all_meshes():
         airfoil.gmsh4mtc_single_step(input_path, output_path)
         print(f"Saved: {output_path}\n")
 
-"""
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         # Single file mode (original behavior)
