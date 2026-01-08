@@ -230,8 +230,8 @@ class Airfoil:
         Convert a GMSH mesh file from version 2 to version 4.
 
         Args: 
-            input (str): The path to the input .msh file.
-            output (str): The path to the output .msh file.
+            input (str): The path to the input .msh file in gmsh format.
+            output (str): The path to the output .t file in mtc format.
 
         Returns:
             None
