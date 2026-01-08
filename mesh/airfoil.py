@@ -9,16 +9,16 @@ import matplotlib.pyplot as plt
 class Airfoil:
 
     def __init__(self, number_of_points, chord_length, thickness, name):
-        self.msh = 0.1
+        self.msh = 0.01
         self.type = "bezier"
         self.number_of_points = number_of_points
         self.chord_length = chord_length
         self.thickness = thickness
         self.points = self.generate_airfoil_points()
-        #self.order_points()
+        self.order_points()
         self.name = name
 
-    def generate_airfoil_points(self, random : bool = False):
+    def generate_airfoil_points(self, random : bool = True):
         """
         Generates a list of number_of_points points randomly if random == true or a NACA 0010 profile if false.
         """
@@ -29,6 +29,7 @@ class Airfoil:
                 y = rd.uniform(-self.thickness / 2, self.thickness / 2)
 
                 points.append((x, y))
+                
             return points
         # If not random : NACA0010 profile
         points = [(1.0000, 0.00105),(0.9500,0.00672),(0.9000,0.01207),(0.8000,0.02187),(0.7000,0.03053),
@@ -101,7 +102,22 @@ class Airfoil:
                 raise ValueError("Unknown transformation type")
         else:
             raise IndexError("Point index out of range")
-        
+
+
+    def rotate(self, angle):
+        """
+        Rotates the whole airfoil by a given angle.
+        """
+        cos_angle = np.cos(angle)
+        sin_angle = np.sin(angle)
+        rotated_points = []
+        for x, y in self.points:
+            x_rot = x * cos_angle - y * sin_angle
+            y_rot = x * sin_angle + y * cos_angle
+            rotated_points.append((x_rot, y_rot))
+        self.points = rotated_points
+
+
     def get_txt(self):
         """
         Creates a .txt file from the airfoil points, with one point (x,y) per line, and returns its file path.
@@ -176,19 +192,6 @@ class Airfoil:
 
         print("Fichier .geo généré : {}".format(output_file))
         return output_file
-    
-
-    def rotate(self, angle):
-
-        input_file = self.get_geo(self.msh, self.type)
-        base_name = os.path.basename(input_file).replace(".geo", "")
-        output_file = os.path.join("geo", base_name + "_" + str(angle) + ".geo")
-
-        angle_rad = angle * np.pi / 180
-        copy(input_file, output_file)
-
-        with open(output_file, "a") as f_out:
-            f_out.write("Rotate " + "{" + "{" + "0, 0, 1}, {0.5, 0, 0}, " + str(angle_rad) + "}  {\n Surface{1};\n}\n")
 
 
     def get_mesh(self):
@@ -507,6 +510,9 @@ class Airfoil:
         print("Done.")
         return
 
+    def sync(self):
+        self.get_mesh()
+        self.get_t()
 
 #TESTS
 TEST1 = False
@@ -519,11 +525,15 @@ if TEST1:
 
 TEST2 = True
 if TEST2:
-    airfoil = Airfoil(10, 1.0, 0.2, "test")
+    airfoil = Airfoil(10, 1.0, 0.2, "test_random")
     print(airfoil.points)
     airfoil.plot()
-    print(airfoil.get_mesh())
-    print(airfoil.gmsh4mtc_single_step())
+    airfoil.sync()
+    airfoil.rotate(45)
+    airfoil.plot()
+    airfoil.sync()
+
+
 
 
 """
