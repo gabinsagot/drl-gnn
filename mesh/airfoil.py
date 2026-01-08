@@ -28,10 +28,11 @@ class Airfoil:
                 x = rd.uniform(-self.chord_length/2, self.chord_length/2)
                 y = rd.uniform(-self.thickness / 2, self.thickness / 2)
 
-                points.append((x, y))
-                
+                points.append([x, y])
+                points = np.ndarray(points)
+
             return points
-        points = np.ndarray(points)
+
         # If not random : NACA0010 profile
         points = np.array([
                 [1.0000,  0.00105],
@@ -71,11 +72,8 @@ class Airfoil:
                 [1.0000, -0.00105]
             ])
         
-        for i in range(len(points)):
-            point = points[1]
-            new_point = (point[0]*self.chord_length, point[1]*self.thickness)
-        
-
+        multiplier = np.full((len(points), 2), np.array([self.chord_length,self.thickness]))
+        points = np.array(np.multiply(points, multiplier))
 
         return points
         
