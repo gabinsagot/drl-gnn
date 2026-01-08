@@ -6,6 +6,52 @@ import numpy as np
 import random as rd
 import matplotlib.pyplot as plt
 
+
+# helper: orientation test
+def _orient(a, b, c):
+    return (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1])
+
+# helper: check if point c lies on segment ab
+def _on_segment(a, b, c):
+    return (min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and
+            min(a[1], b[1]) <= c[1] <= max(a[1], b[1]))
+
+# check if two segments (a1-a2) and (b1-b2) intersect
+def _segments_intersect(a1, a2, b1, b2):
+    o1 = _orient(a1, a2, b1)
+    o2 = _orient(a1, a2, b2)
+    o3 = _orient(b1, b2, a1)
+    o4 = _orient(b1, b2, a2)
+
+    if o1 == 0 and _on_segment(a1, a2, b1):
+        return True
+    if o2 == 0 and _on_segment(a1, a2, b2):
+        return True
+    if o3 == 0 and _on_segment(b1, b2, a1):
+        return True
+    if o4 == 0 and _on_segment(b1, b2, a2):
+        return True
+
+    return (o1 > 0) != (o2 > 0) and (o3 > 0) != (o4 > 0)
+
+# check if polygon defined by pts has any self-intersections
+def _is_self_intersecting(pts):
+    n = len(pts)
+    if n < 4:
+        return False
+    edges = [(i, (i + 1) % n) for i in range(n)]
+    for i, (a1_i, a2_i) in enumerate(edges):
+        for j, (b1_i, b2_i) in enumerate(edges):
+            # skip same edge or adjacent edges (they share a node)
+            if abs(i - j) <= 1 or (i == 0 and j == n - 1) or (j == 0 and i == n - 1):
+                continue
+            if _segments_intersect(pts[a1_i], pts[a2_i], pts[b1_i], pts[b2_i]):
+                return True
+    return False
+
+
+
+
 class Airfoil:
 
     def __init__(self, number_of_points, chord_length, thickness, name):
@@ -15,10 +61,10 @@ class Airfoil:
         self.chord_length = chord_length
         self.thickness = thickness
         self.points = self.generate_airfoil_points()
-        self.order_points()
+        #self.order_points()
         self.name = name
 
-    def generate_airfoil_points(self, random : bool = True):
+    def generate_airfoil_points(self, random : bool = False):
         """
         Generates a list of number_of_points points randomly if random == true or a NACA 0010 profile if false.
         """
@@ -110,10 +156,12 @@ class Airfoil:
     def transform(self, 
                   point_ind : int,
                   transformation_parameters : tuple[float, float],
-                  transformation : str = "new_coord"):
+                  transformation : str = "new_coord",
+                  constraint_parameter : float,
+                  constraint : str = "max_thickness"):
         """
         Applies a transformation to a specific point of the airfoil.
-
+        Since we want to avoid entanglement, we need to be careful with how we transform points.
         Args: 
             point_ind (int): The index of the point to transform.
             transformation_parameters (tuple[float, float]): The parameters for the transformation.
@@ -121,21 +169,37 @@ class Airfoil:
                 (among 'new_coord' which changes the point's coordinates, 'translation' which moves the point, and 'scaling' which scales the point).
         """
         if 0 <= point_ind < len(self.points):
-
+            candidate = list(self.points)
+            constraint_satisfied = False 
+            # Work on a copy and validate the transformation won't create intersections
+            
+            #COMPUTE NEW POINT CANDIDATE
             if transformation == "new_coord":
                 new_x, new_y = transformation_parameters
-                self.points[point_ind] = (new_x, new_y)
+                candidate[point_ind] = (new_x, new_y)
 
             elif transformation == "translation":
                 dx, dy = transformation_parameters
-                self.points[point_ind] = (self.points[point_ind][0] + dx,
-                                          self.points[point_ind][1] + dy)
+                candidate[point_ind] = (candidate[point_ind][0] + dx,
+                                        candidate[point_ind][1] + dy)
             elif transformation == "scaling":
                 sx, sy = transformation_parameters
-                self.points[point_ind] = (self.points[point_ind][0] * sx,
-                                          self.points[point_ind][1] * sy)
+                candidate[point_ind] = (candidate[point_ind][0] * sx,
+                                        candidate[point_ind][1] * sy)
             else:
                 raise ValueError("Unknown transformation type")
+            
+            #CHECK WHETHER NEW POINT CANDIDATE RESPECTS CONSTRAINTS OR NOT
+            if constraint == "max_thickness":
+                
+                y = max(self.points[])
+
+            if not _is_self_intersecting(candidate) and not constraint_satisfied:
+                self.points = candidate
+            else:
+                raise ValueError("Transformation would create self-intersections or violate constraints")
+                return None
+            
         else:
             raise IndexError("Point index out of range")
 
@@ -158,6 +222,8 @@ class Airfoil:
         """
         Creates a .txt file from the airfoil points, with one point (x,y) per line, and returns its file path.
         """
+        os.makedirs("txt", exist_ok=True)
+
         with open(f"{self.name}.txt", "w") as f:
             for x, y in self.points:
                 f.write("{}    {}\n".format(x, y))
@@ -247,6 +313,7 @@ class Airfoil:
 
         return msh_output
     
+
     def get_domain(self):
         input_file = self.get_t(self.msh, self.type)
         os.makedirs("t_files", exist_ok=True)
@@ -560,20 +627,21 @@ class Airfoil:
         print("Done.")
         return
 
+
     def sync(self):
         self.get_mesh()
         self.get_t()
 
 #TESTS
-TEST1 = False
+TEST1 = 0
 if TEST1:
-    airfoil = Airfoil(10, 1.0, 0.2, "test")
+    airfoil = Airfoil(20, 1.0, 0.2, "test")
     print(airfoil.points)
     airfoil.plot()
     airfoil.transform(0, (0.1, 0.0))
     airfoil.plot()
 
-TEST2 = True
+TEST2 = 0
 if TEST2:
     airfoil = Airfoil(10, 1.0, 0.2, "test_random")
     print(airfoil.points)
@@ -583,8 +651,18 @@ if TEST2:
     airfoil.plot()
     airfoil.sync()
 
-
-
+TEST3 = 1
+if TEST3:
+    airfoil = Airfoil(10, 1.0, 0.2, "modif_test")
+    n = 10
+    airfoil.plot()
+    for i in range(n):
+        airfoil.number_of_points = len(airfoil.points)
+        airfoil.name = f"modif_test"
+        airfoil.transform(rd.randint(0, airfoil.number_of_points - 1), (rd.uniform(-0.05, 0.05), rd.uniform(-0.05, 0.05)), transformation="translation")
+        airfoil.plot()
+        airfoil.sync()
+    
 
 """
 def process_all_meshes():
