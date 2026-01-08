@@ -159,7 +159,7 @@ class Airfoil:
                   point_ind : int,
                   transformation_parameters : tuple[float, float],
                   transformation : str = "new_coord",
-                  constraint_parameter : float,
+                  constraint_parameter : float = 1,
                   constraint : str = "max_thickness"):
         """
         Applies a transformation to a specific point of the airfoil.
@@ -193,17 +193,26 @@ class Airfoil:
             
             #CHECK WHETHER NEW POINT CANDIDATE RESPECTS CONSTRAINTS OR NOT
             if constraint == "max_thickness":
-                
-                y = max(self.points[])
+                #checks whether the delta between the max of the y coordinates of all points and the min is above constraint_parameter
+                y_max = max(self.points[1])
+                y_min = min(self.points[1])
+                delta = y_max - y_min
+                print(delta)
 
-            if not _is_self_intersecting(candidate) and not constraint_satisfied:
+                constraint_satisfied = (delta > constraint_parameter)
+
+            if not _is_self_intersecting(candidate) and constraint_satisfied:
                 self.points = candidate
             else:
-                raise ValueError("Transformation would create self-intersections or violate constraints")
-                return None
+                print("Transformation would create self-intersections or violate constraints")
+                return -10
+                
+                
             
         else:
             raise IndexError("Point index out of range")
+        
+        return 10
 
 
     def rotate(self, angle):
