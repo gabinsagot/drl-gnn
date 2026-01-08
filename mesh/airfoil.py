@@ -213,6 +213,13 @@ class Airfoil:
         return 10
 
 
+    def translate(self, x, y):
+        """
+        Translates the whole airfoil by a given (x, y) vector.
+        """
+        self.points = [(px + x, py + y) for px, py in self.points]
+
+
     def rotate(self, angle):
         """
         Rotates the whole airfoil by a given angle.
@@ -321,21 +328,6 @@ class Airfoil:
         print(".msh file generated : {}".format(msh_output))
 
         return msh_output
-    
-
-    def get_domain(self):
-        input_file = self.get_t(self.msh, self.type)
-        os.makedirs("t_files", exist_ok=True)
-        
-        base_name = os.path.basename(input_file)
-        output_file = os.path.join("t_files", "domain.t")
-
-        # Run prout.bat
-
-        # Get the last .t file and rename it properly
-
-        # Return path to the file
-        return domain_output
 
 
     def get_t(self) -> None:
@@ -637,6 +629,21 @@ class Airfoil:
         return
 
 
+    def get_domain(self):
+        input_file = self.get_t(self.msh, self.type)
+        os.makedirs("t_files", exist_ok=True)
+        
+        base_name = os.path.basename(input_file)
+        output_file = os.path.join("t_files", "domain.t")
+
+        # Run prout.bat
+
+        # Get the last .t file and rename it properly
+
+        # Return path to the file
+        return domain_output
+
+
     def sync(self):
         self.get_mesh()
         self.get_t()
@@ -644,33 +651,42 @@ class Airfoil:
 #TESTS
 TEST1 = 0
 if TEST1:
-    airfoil = Airfoil(20, 1.0, 0.2, "test")
+    airfoil = Airfoil(20, 1.0, 1.0, "test")
     print(airfoil.points)
     airfoil.plot()
-    airfoil.transform(0, (0.1, 0.0))
+    airfoil.transform(0, (0.01, -0.01), "translation", 0.05, "max_thickness")
     airfoil.plot()
 
 TEST2 = 0
 if TEST2:
-    airfoil = Airfoil(10, 1.0, 0.2, "test_random")
+    airfoil = Airfoil(10, 1.0, 1.0, "test_random")
+    print(type(airfoil.points))
     print(airfoil.points)
     airfoil.plot()
     airfoil.sync()
-    airfoil.rotate(45)
+    airfoil.rotate(3.14)
     airfoil.plot()
     airfoil.sync()
 
 TEST3 = 1
 if TEST3:
-    airfoil = Airfoil(10, 1.0, 0.2, "modif_test")
+    airfoil = Airfoil(10, 1.0, 1.0, "modif_test")
     n = 10
     airfoil.plot()
-    for i in range(n):
-        airfoil.number_of_points = len(airfoil.points)
-        airfoil.name = f"modif_test"
-        airfoil.transform(rd.randint(0, airfoil.number_of_points - 1), (rd.uniform(-0.05, 0.05), rd.uniform(-0.05, 0.05)), transformation="translation")
-        airfoil.plot()
-        airfoil.sync()
+    airfoil.number_of_points = len(airfoil.points)
+    airfoil.name = f"modif_test"
+    count = 0
+    while count < n:
+
+        t = airfoil.transform(rd.randint(0, airfoil.number_of_points - 1), 
+                          (rd.uniform(-0.05, 0.05), rd.uniform(-0.05, 0.05)), 
+                          transformation="translation", 
+                          constraint_parameter=0.1)
+        if t>0:
+            #airfoil.plot()
+            airfoil.sync()
+            count += 1
+
     
 
 """
