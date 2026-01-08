@@ -206,9 +206,7 @@ class Airfoil:
         print(".msh file generated : {}".format(msh_output))
 
 
-    def gmsh4mtc_single_step(self, 
-                         output : str
-            ) -> None:
+    def gmsh4mtc_single_step(self) -> str :
         
         """
         GMSH4MTC
@@ -229,12 +227,6 @@ class Airfoil:
        
         Convert a GMSH mesh file from version 2 to version 4.
 
-        Args: 
-            input (str): The path to the input .msh file in gmsh format.
-            output (str): The path to the output .t file in mtc format.
-
-        Returns:
-            None
         """
 
         print("#########################################################")
@@ -245,6 +237,10 @@ class Airfoil:
 
         print("Initialisation...\n")
         input = self.name + ".msh"
+        input_path = os.path.join("meshes", input)
+        output_filename = self.name + ".t"
+        output_path = os.path.join("t_files", output_filename)
+
         with open(input) as f:
             f.readline()
             version = f.readline().split()[0]
@@ -498,7 +494,8 @@ class Airfoil:
                     fo.write(str(e[0]) + " " + str(e[1]) + " 0 \n")
 
         print("Done.")
-        return
+        #returns the .t file path
+        return output
 
 
 #TESTS
