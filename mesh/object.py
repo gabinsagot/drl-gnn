@@ -17,21 +17,32 @@ class Airfoil:
         self.order_points()
         self.name = name
 
-    def generate_airfoil_points(self):
+    def generate_airfoil_points(self, random : bool = False):
         """
-        Generates a list of number_of_points points.
+        Generates a list of number_of_points points randomly if random == true or a NACA 0010 profile if false.
         """
         points = []
-        for i in range(self.number_of_points):
-            x = rd.uniform(-self.chord_length/2, self.chord_length/2)
-            y = rd.uniform(-self.thickness / 2, self.thickness / 2)
+        if random :
+            for i in range(self.number_of_points):
+                x = rd.uniform(-self.chord_length/2, self.chord_length/2)
+                y = rd.uniform(-self.thickness / 2, self.thickness / 2)
 
-            points.append((x, y))
+                points.append((x, y))
+            return points
+        # If not random : NACA0010 profile
+        points = [(1.0000, 0.00105),(0.9500,0.00672),(0.9000,0.01207),(0.8000,0.02187),(0.7000,0.03053),
+                  (0.6000,0.03803),(0.5000,0.04412),(0.4000,0.04837),(0.3000,0.05002),(0.2500,0.04952),
+                  (0.2000,0.04782),(0.1500,0.04455),(0.1000,0.03902),(0.0750,0.03500),(0.0500,0.02962),
+                  (0.0250,0.02178),(0.0125,0.01578),(0.0000,0.00000),(0.0125, -0.01578),(0.0250, -0.02178),
+                  (0.0500, -0.02962),(0.0750, -0.03500),(0.1000, -0.03902),(0.1500, -0.04455),(0.2000, -0.04782),
+                  (0.2500, -0.04952),(0.3000, -0.05002),(0.4000, -0.04837),(0.5000, -0.04412),(0.6000, -0.03803),
+                  (0.7000, -0.03053),(0.8000, -0.02187),(0.9000, -0.01207),(0.9500, -0.00672),(1.0000, -0.00105),]
         return points
+        
     
     def order_points(self):
         """
-        Orders the point of the airfoil, with increasing indices in the trigonometric sense, and starting from the rightmost point.
+        Orders the point of the airfoil, with increasing indices in the trigonometric direction, and starting from the rightmost point.
         """
         # sort by polar angle (counter-clockwise)
         angles = [np.arctan2(p[1], p[0]) for p in self.points]
@@ -491,15 +502,15 @@ class Airfoil:
 
 
 #TESTS
-TEST1 = False
+TEST1 = True
 if TEST1:
-    airfoil = Airfoil(10, 1.0, 0.2)
+    airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
     airfoil.plot()
     airfoil.transform(0, (0.1, 0.0))
     airfoil.plot()
 
-TEST2 = True
+TEST2 = False
 if TEST2:
     airfoil = Airfoil(10, 1.0, 0.2, "test")
     print(airfoil.points)
