@@ -1,0 +1,20 @@
+// Fichier .geo généré à partir de c:\Users\mbailly1\OneDrive - Université Paris Sciences et Lettres\Fichiers de Gabin SAGOT - TR Fluides\PBO\Maxime\pbo-cfd\pbo_v0\geometry\mesh\txt_files\domain_naca0010_12_4.txt
+h = 0.01;
+Point(1) = {3.5, 2.00105, 0, h};
+Point(2) = {3.3, 2.02, 0, h};
+Point(3) = {3.0, 2.043, 0, h};
+Point(4) = {2.8, 2.05, 0, h};
+Point(5) = {2.62, 2.042, 0, h};
+Point(6) = {2.525, 2.022, 0, h};
+Point(7) = {2.5, 2.0, 0, h};
+Point(8) = {2.525, 1.978, 0, h};
+Point(9) = {2.62, 1.958, 0, h};
+Point(10) = {2.8, 1.95, 0, h};
+Point(11) = {3.0, 1.957, 0, h};
+Point(12) = {3.3, 1.98, 0, h};
+Point(13) = {3.5, 1.99895, 0, h};
+Point(14) = {3.5, 2.0, 0, h};
+Spline(1) = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+Line(2) = {1, 14, 13};
+Curve Loop(1) = {-1, 2};
+Plane Surface(1) = {1};
