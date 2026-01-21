@@ -349,14 +349,17 @@ class Foil:
 
     def apply_rotation(self, angle):
         """
-        Rotates the whole airfoil by a given angle in radians.
+        Rotates the whole airfoil by a given angle in radians around its center of mass.
         """
         cos_angle = np.cos(angle)
         sin_angle = np.sin(angle)
+        #Compute the coordinates of the center of mass
+        x_center = np.mean([x for x, y in self.points])
+        y_center = np.mean([y for x, y in self.points])
         rotated_points = []
-        for x, y in self.points:
-            x_rot = x * cos_angle - y * sin_angle
-            y_rot = x * sin_angle + y * cos_angle
+        for x, y in self.points: #rotates around the center of mass
+            x_rot = x_center + (x - x_center) * cos_angle - (y - y_center) * sin_angle
+            y_rot = y_center + (x - x_center) * sin_angle + (y - y_center) * cos_angle
             rotated_points.append((x_rot, y_rot))
         self.points = rotated_points
 
@@ -823,7 +826,7 @@ if TEST2:
     print(airfoil.points)
     airfoil.plot()
     airfoil.sync()
-    airfoil.apply_rotation(3.14)
+    airfoil.apply_rotation(-0.3)
     airfoil.plot()
     airfoil.sync()
 
