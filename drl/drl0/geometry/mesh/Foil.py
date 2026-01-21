@@ -64,7 +64,7 @@ class Foil:
         suffix:   string appended to file basenames (e.g., '_17') to ensure uniqueness.
         """
         self.msh_size = 0.01
-        self.type = "spline"
+        self.type = "bspline"
         self.number_of_points = number_of_points
         self.chord_length = chord_length_multiplier
         self.thickness_multiplier = thickness_multiplier
@@ -344,7 +344,9 @@ class Foil:
         """
         Translates the whole airfoil by a given (x, y) vector.
         """
-        self.points = [(px + x, py + y) for px, py in self.points]
+        shape = np.array(self.points).shape
+        translation = np.array(np.full(shape, [x, y]))
+        self.points = self.points + translation
 
 
     def apply_rotation(self, angle):
@@ -399,14 +401,11 @@ class Foil:
             f_out.write("// Fichier .geo généré à partir de {}\n".format(input_file))
             f_out.write("h = {};\n".format(h))
             point_id = 1
-            zero = 0
 
             for line in f_in:
 
                 x_str, y_str = line.split()
                 x, y = float(x_str), float(y_str)
-                if (x, y) == (0.0, 0.0):
-                    zero = point_id
                 f_out.write("Point({}) = {{{}, {}, 0, h}};\n".format(point_id, x, y))
                 point_id += 1
 
@@ -418,9 +417,6 @@ class Foil:
                 f_out.write("Line({}) = {{{}, 1}};\n".format(point_id - 1, point_id - 1))
 
             if type == "bspline":
-                L_attaque = [zero - 1, zero, zero + 1]
-                L_up = [i for i in range(1, zero)]
-                L_down = [i for i in range(zero + 1, point_id)] + [1]
 
                 L = [i for i in range(1, point_id-1)]
 
@@ -428,9 +424,6 @@ class Foil:
                 f_out.write("Line(2) = {{1, {}, {}}};\n".format(point_id-1, point_id-2))
 
             if type == "spline":
-                L_attaque = [zero - 1, zero, zero + 1]
-                L_up = [i for i in range(1, zero)]
-                L_down = [i for i in range(zero + 1, point_id)] + [1]
 
                 L = [i for i in range(1, point_id-1)]
 

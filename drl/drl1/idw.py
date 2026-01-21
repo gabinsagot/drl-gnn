@@ -145,6 +145,65 @@ def artificial_cp_spline(init_foil, new_foil, density = 100, k=2):
     #print("Artificial control points displacement :", acp_displacements)            
     return init_acp, acp_displacements
 
+def artificial_cp_bezier(init_foil, new_foil, density):
+    new_foil_points = new_foil.points
+    init_foil_points = init_foil.points
+
+    ### Create spline interpolating every point except last one (trailing edge not on same spline)
+    points_init = np.array(init_foil_points[0:-1])
+    points_new = np.array(new_foil_points[0:-1])
+    x_init = points_init[:,0]
+    y_init = points_init[:,1]
+    x_new = points_new[:,0]
+    y_new = points_new[:,1]
+
+    (tck_init, u_init) = splprep([x_init, y_init], s=0.002, k=3)
+    #print("u_init is : ",u_init)
+    (tck_new, u_new) = splprep([x_new, y_new], s=0.002, k=3)
+
+    for i in range(len(points_init)-1):
+        # Compute the length of the spline segment created between consecutive points
+        new_point_i = u_new[i]
+        new_point_ip1 = u_new[i+1]
+        length_new = compute_spline_length(tck_new, new_point_i, new_point_ip1)
+    
+        # Create n artificial control points along the splines segment according to and new spline length density
+        n = int(np.floor(2.0*length_new*density))
+
+        init_point_i = u_init[i]
+        init_point_ip1 = u_init[i+1]
+                                
+        new_acp_u = np.linspace(new_point_i, new_point_ip1, (n+2))[1:]
+        init_acp_u = np.linspace(init_point_i, init_point_ip1, (n+2))[1:]
+
+        # Get the coordinates of the init and new artificial control points
+        x_acp_new, y_acp_new = splev(new_acp_u, tck_new)
+        x_acp_init, y_acp_init = splev(init_acp_u, tck_init)
+        # Compute points displacements
+        new_acp_partial = np.array(np.vstack((x_acp_new, y_acp_new)).T)
+        init_acp_partial = np.array(np.vstack((x_acp_init, y_acp_init)).T)
+
+        acp_displacements_partial = new_acp_partial - init_acp_partial
+
+        if i == 0:
+            acp_displacements = acp_displacements_partial
+            init_acp = init_acp_partial
+        else :
+            acp_displacements = np.concatenate([acp_displacements,acp_displacements_partial])
+            init_acp = np.concatenate([init_acp,init_acp_partial])
+
+    # Add the last point (middle of trailling edge) at the end
+    init_cp_te = init_foil_points[-1]
+    new_cp_te = new_foil_points[-1]
+
+    acp_displacements_partial = np.array(new_cp_te) - np.array(init_cp_te)
+    
+    acp_displacements = np.concatenate([acp_displacements,[acp_displacements_partial]])
+    init_acp = np.concatenate([init_acp,[init_cp_te]])
+
+    #print("Artificial control points displacement :", acp_displacements)            
+    return init_acp, acp_displacements
+
 def stack(cp, acp):
     """
     Returns a np.ndarray control points in the same order as on the foil's spline,
@@ -167,7 +226,7 @@ def stack(cp, acp):
     stacked_cp = np.array(stacked_cp)
     return stacked_cp
 
-def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, refine_type = "spline", density = 100, p = 3):
+def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 3):
     """
     Returns the path (str) to new domain.t deformed according to IDW
     
@@ -202,7 +261,7 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
     except ValueError as e:
         print("Error in compute_init_mesh_displacements: ", e)
 
-    if refine_type == "spline":
+    if interp_type == "spline":
         init_acp, acp_displacements = artificial_cp_spline(init_naca, end_naca, density, k=2)
         # Intercaler chaque acp entre les cp initiaux
         foil_cp = stack(init_cp, init_acp)
@@ -210,9 +269,17 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         control_points = np.array(control_points) # No need to order here thanks to stack method
 
         displacements = stack(init_displacements, acp_displacements)
-        #print("All control points displacements with spline interpolation : ", displacements)
 
-    if refine_type == "linear":
+    if interp_type == "bezier":
+        init_acp, acp_displacements = artificial_cp_bezier(init_naca, end_naca, density = 100)
+        foil_cp = init_acp
+        control_points = get_closest_point(foil_cp, original_mesh)
+        control_points = np.array(control_points)
+
+        displacements = acp_displacements
+        # print("All control points displacements with Bézier interpolation : ", displacements)
+
+    if interp_type == "linear":
         init_acp, acp_displacements = artificial_cp_linear(init_naca, end_naca, n=2)
 
         foil_cp = np.vstack((init_cp, init_acp))
@@ -222,18 +289,14 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         # Order control points by trigonometric angle
         displacements = np.vstack((init_displacements, acp_displacements))
 
-        # print(f"Initially, {len(init_cp)} control points and {len(init_displacements)} displacements.")
-        # print(f"{len(init_acp)} articifial cps and {len(acp_displacements)} corresponding displacements were added.")
-        # print(f"Total cps: {len(control_points)}. Total displacements: {len(displacements)}")
-
     # Move the points in mesh data
     new_mesh = idw(original_mesh, control_points, displacements, p)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
-    new_domain_path = replace_points(input_t_file_path, output_t_file_path, new_mesh)
+    replace_points(input_t_file_path, output_t_file_path, new_mesh)
 
-    return new_domain_path
+    return foil_cp + displacements
 
 
 def get_closest_point(points, mesh):

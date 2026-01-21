@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=foil_attck_drl
+#SBATCH --job-name=foil_drl
 #SBATCH --output=log.out
 #SBATCH --partition=MAIN
 #SBATCH --qos=calcul

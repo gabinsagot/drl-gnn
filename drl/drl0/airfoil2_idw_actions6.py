@@ -264,6 +264,65 @@ class airfoil():
         #print("Artificial control points displacement :", acp_displacements)            
         return init_acp, acp_displacements
 
+    def artificial_cp_bezier(self, init_foil, new_foil, density):
+        new_foil_points = new_foil.points
+        init_foil_points = init_foil.points
+
+        ### Create spline interpolating every point except last one (trailing edge not on same spline)
+        points_init = np.array(init_foil_points[0:-1])
+        points_new = np.array(new_foil_points[0:-1])
+        x_init = points_init[:,0]
+        y_init = points_init[:,1]
+        x_new = points_new[:,0]
+        y_new = points_new[:,1]
+
+        (tck_init, u_init) = splprep([x_init, y_init], s=0.002, k=3)
+        #print("u_init is : ",u_init)
+        (tck_new, u_new) = splprep([x_new, y_new], s=0.002, k=3)
+
+        for i in range(len(points_init)-1):
+            # Compute the length of the spline segment created between consecutive points
+            new_point_i = u_new[i]
+            new_point_ip1 = u_new[i+1]
+            length_new = self.compute_spline_length(tck_new, new_point_i, new_point_ip1)
+        
+            # Create n artificial control points along the splines segment according to and new spline length density
+            n = int(np.floor(2.0*length_new*density))
+
+            init_point_i = u_init[i]
+            init_point_ip1 = u_init[i+1]
+                                    
+            new_acp_u = np.linspace(new_point_i, new_point_ip1, (n+2))[1:]
+            init_acp_u = np.linspace(init_point_i, init_point_ip1, (n+2))[1:]
+    
+            # Get the coordinates of the init and new artificial control points
+            x_acp_new, y_acp_new = splev(new_acp_u, tck_new)
+            x_acp_init, y_acp_init = splev(init_acp_u, tck_init)
+            # Compute points displacements
+            new_acp_partial = np.array(np.vstack((x_acp_new, y_acp_new)).T)
+            init_acp_partial = np.array(np.vstack((x_acp_init, y_acp_init)).T)
+
+            acp_displacements_partial = new_acp_partial - init_acp_partial
+
+            if i == 0:
+                acp_displacements = acp_displacements_partial
+                init_acp = init_acp_partial
+            else :
+                acp_displacements = np.concatenate([acp_displacements,acp_displacements_partial])
+                init_acp = np.concatenate([init_acp,init_acp_partial])
+
+        # Add the last point (middle of trailling edge) at the end
+        init_cp_te = init_foil_points[-1]
+        new_cp_te = new_foil_points[-1]
+
+        acp_displacements_partial = np.array(new_cp_te) - np.array(init_cp_te)
+     
+        acp_displacements = np.concatenate([acp_displacements,[acp_displacements_partial]])
+        init_acp = np.concatenate([init_acp,[init_cp_te]])
+
+        #print("Artificial control points displacement :", acp_displacements)            
+        return init_acp, acp_displacements
+
     def stack(self, cp, acp):
         """
         Returns a np.ndarray control points in the same order as on the foil's spline
@@ -284,9 +343,9 @@ class airfoil():
         stacked_cp = np.array(stacked_cp)
         return stacked_cp
 
-    def compute_idw_mesh(self, actions, init_naca, end_naca, refine_type = "linear", p = 2):
+    def compute_idw_mesh(self, actions, init_naca, end_naca, interp_type = "bezier", p = 2):
         """
-        Returns the path (str) to new domain.t
+        Returns the new control points of the foil
         Deforms the original NACA0010 mesh according to actions (specific to symetrical y-change actions)
         """
 
@@ -298,13 +357,10 @@ class airfoil():
         init_cp = np.array(init_cp)
         self.order_points(init_cp)
         new_cp = end_naca.points
-        new_cp = np.array(new_cp)
+
         # Compute init_displacements
         init_displacements = self.compute_init_mesh_displacements(init_cp, new_cp, init_naca.origin)
-
-        print("New_points coords : ", new_cp)
-
-        if refine_type == "spline":
+        if interp_type == "spline":
             init_acp, acp_displacements = self.artificial_cp_spline(init_naca, end_naca, density = 100, k=2)
             # Intercaler chaque acp entre les cp initiaux
             foil_cp = self.stack(init_cp, init_acp)
@@ -314,7 +370,16 @@ class airfoil():
             displacements = self.stack(init_displacements, acp_displacements)
             print("All control points displacements with spline interpolation : ", displacements)
 
-        if refine_type == "linear":
+        if interp_type == "bezier":
+            init_acp, acp_displacements = self.artificial_cp_bezier(init_naca, end_naca, density = 100)
+            foil_cp = init_acp
+            control_points = get_closest_point(foil_cp, original_mesh)
+            control_points = np.array(control_points)
+
+            displacements = acp_displacements
+            print("All control points displacements with Bézier interpolation : ", displacements)
+
+        if interp_type == "linear":
             init_acp, acp_displacements = self.artificial_cp(init_naca, end_naca, n=2)
 
             foil_cp = np.vstack((init_cp, init_acp))
@@ -331,13 +396,13 @@ class airfoil():
 
         # Move the points in mesh data
         new_mesh = idw(original_mesh, control_points, displacements, p)
-        # Write new .t file
 
+        # Write new .t file
         input_t_file_path = "domain/domain_naca0010_12_4.t"
         output_t_file_path = "cfd/meshes/domain.t"
-        new_domain_path = replace_points(input_t_file_path, output_t_file_path, new_mesh)
+        replace_points(input_t_file_path, output_t_file_path, new_mesh)
 
-        return new_domain_path
+        return foil_cp + displacements
     
     def create_geometry(self, actions : np.ndarray, name : str, plot : bool = False, naca0010 : bool = False):
         """
@@ -361,35 +426,28 @@ class airfoil():
         naca0010_foil = Foil(10, 1.0, 1.0)
         naca0010_foil.generate_airfoil_points(random = False)
         naca0010_foil.apply_translation(x_trans_domain,y_trans_domain)
-        naca0010_points = naca0010_foil.points
 
         if not naca0010 : 
-            foil.camber_thickness(actions = np.array([
-            0.1, 0.12, 0.13, 0.07, 0.03, #camber
-            0.05, 0.1, 0.1, 0.1, 0.05,    #thickness
-            -0.3                               #rotation
-    ]))
-        foil.apply_rotation(-0/180.0*np.pi)
+            foil.camber_thickness(actions)
+
         foil.apply_translation(x_trans_domain,y_trans_domain)
-        foil.sync() # Generate the t_file "name.t"
         self.foil_area = foil.compute_surface() # Computes approximate area of the foil (polygon)
         print(self.foil_area)
         if plot : foil.plot()
 
+        # Deform the original domain with IDW according to actions and control points position
+        control_points = self.compute_idw_mesh(actions, naca0010_foil, foil, interp_type="bezier", p = 3)
+
+        # Get every new control points & give it to foil.points()
+        foil.points = control_points
+
+        # Generate new .t file via sync()
+        foil.sync()
+
         # Copy the newly created .t file in the cfd/meshes folder
-        t_file_path = os.path.join(self.path, "geometry", "mesh", "t_files", name + ".t")
+        t_file_path = os.path.join(self.path, "t", name + ".t")
         t_file_output_path = os.path.join(self.path, "cfd", "meshes", name + ".t")
         shutil.copy2(t_file_path, t_file_output_path)
-
-        t_folder_path = os.path.join(self.path, "cfd", "meshes")
-        # Give it to the mtcexe to repair normals
-        os.system(f'cd {t_folder_path} ; module load cimlibxx/master')
-        os.system('echo 0 | mtcexe object.t')
-        # print("t_file sent to mtc.exe")
-
-        # Deform the original domain with IDW according to actions and control points position
-        new_domain_path = self.compute_idw_mesh(actions, naca0010_foil, foil, refine_type="spline", p = 3)
-
 
         return foil.surface
 
@@ -511,25 +569,30 @@ class airfoil():
 ### Tests ###
 filepath = os.path.dirname(os.path.abspath(__file__))
 pbo = airfoil(filepath)
-actions = np.array([0.00105, 0.0105, 0.105, 0.0105, 0.105, 0.0105])
-pbo.create_geometry(actions, "object", plot = True, naca0010 = False)
-
-
-
-TEST7 = 0
-if TEST7:
-    airfoil = Foil(10, 1.0, 1.0)
-    airfoil.name = "new_transfo"
-    # points = airfoil.points
-    # print(f"Points: {len(points)}")
-    # print(f"points[0], points[1], points[13]: {points[0]}, {points[1]}, {points[13]}")
-    actions = np.array([
-            0.1, 0.12, 0.13, 0.07, 0.03, #camber
-            0.05, 0.1, 0.1, 0.1, 0.05,    #thickness
-            -0.3                               #rotation
+#actions = np.array([0.00105, 0.0105, 0.105, 0.0105, 0.105, 0.0105])
+actions = np.array([
+            0.05, 0.08, 0.08, 0.041, 0.004, #camber
+            0.03, 0.07, 0.08, 0.08, 0.04,    #thickness
+            -0.0                               #rotation
     ])
-    airfoil.camber_thickness(actions)
-    
-    airfoil.apply_translation(2.5,2)
+pbo.create_geometry(actions, "object", plot = False, naca0010 = False)
 
-    print(airfoil.sync())
+
+
+# TEST7 = 0
+# if TEST7:
+#     foil = Foil(10, 1.0, 1.0)
+#     foil.name = "new_transfo"
+#     # points = airfoil.points
+#     # print(f"Points: {len(points)}")
+#     # print(f"points[0], points[1], points[13]: {points[0]}, {points[1]}, {points[13]}")
+#     actions = np.array([
+#             0.1, 0.12, 0.13, 0.07, 0.03, #camber
+#             0.05, 0.1, 0.1, 0.1, 0.05,    #thickness
+#             -0.3                               #rotation
+#     ])
+#     foil.camber_thickness(actions)
+    
+#     foil.apply_translation(2.5,2)
+
+#     print(foil.sync())
