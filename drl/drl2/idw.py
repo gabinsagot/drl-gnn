@@ -250,6 +250,7 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
     init_cp = np.array(init_cp)
     order_points(init_cp)
     new_cp = end_naca.points
+    new_cp = np.array(new_cp)
 
     try:
         if init_cp.shape != new_cp.shape:
@@ -261,23 +262,22 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         print("Error in compute_init_mesh_displacements: ", e)
 
     if interp_type == "spline":
-        init_acp, acp_displacements = artificial_cp_spline(init_naca, end_naca, density = density, k=2)
+        init_acp, acp_displacements = artificial_cp_spline(init_naca, end_naca, density, k=2)
         # Intercaler chaque acp entre les cp initiaux
         foil_cp = stack(init_cp, init_acp)
         control_points = get_closest_point(foil_cp, original_mesh)
         control_points = np.array(control_points) # No need to order here thanks to stack method
 
         displacements = stack(init_displacements, acp_displacements)
-        print("All control points displacements with spline interpolation : ", displacements)
 
     if interp_type == "bezier":
-        init_acp, acp_displacements = artificial_cp_bezier(init_naca, end_naca, density = density)
+        init_acp, acp_displacements = artificial_cp_bezier(init_naca, end_naca, density = 100)
         foil_cp = init_acp
         control_points = get_closest_point(foil_cp, original_mesh)
         control_points = np.array(control_points)
 
         displacements = acp_displacements
-        print("All control points displacements with Bézier interpolation : ", displacements)
+        # print("All control points displacements with Bézier interpolation : ", displacements)
 
     if interp_type == "linear":
         init_acp, acp_displacements = artificial_cp_linear(init_naca, end_naca, n=2)
@@ -294,9 +294,9 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
-    new_domain_path = replace_points(input_t_file_path, output_t_file_path, new_mesh)
+    replace_points(input_t_file_path, output_t_file_path, new_mesh)
 
-    return new_domain_path
+    return foil_cp + displacements
 
 
 def get_closest_point(points, mesh):

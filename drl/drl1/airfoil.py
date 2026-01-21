@@ -147,11 +147,6 @@ class airfoil():
         y_trans_domain = 2.0
 
         # Build the foil
-        # Save original foil points to compute displacements
-        naca0010_foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
-        naca0010_foil.generate_airfoil_points(random = False)
-        naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
-
         foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
         foil.name = name  # 'object'
         foil.generate_airfoil_points(random=False)
@@ -160,13 +155,18 @@ class airfoil():
 
         self.foil_area = foil.compute_surface() # Computes approximate area of the foil (polygons)
         if plot : foil.plot()
+        
+        # Save original foil points to compute displacements
+        naca0010_foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
+        naca0010_foil.generate_airfoil_points(random = False)
+        naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
 
-        # Deform the original mesh with IDW according to actions
-        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="spline", density = 100, p = 2)
-
+        # Deform the original domain with IDW according to actions and control points position
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="spline", p = 3)
         # Get every new control points & give it to foil.points()
         foil.points = control_points
-        # Generate new .t file via sync() according to all control points
+
+        # Generate new .t file via sync()
         t_file_path = foil.sync()  # /geometry/mesh/{ep}/t/object_{ep}.t
 
         if not os.path.isfile(t_file_path):
@@ -183,13 +183,13 @@ class airfoil():
         os.replace(tmp_dst, final_dst)
 
         # Run mtcexe
-        # cmd = (
-        #     f'cd "{meshes_dir}" && '
-        #     f'module load cimlibxx/master && '
-        #     f'echo 0 | mtcexe object.t > /dev/null 2>&1'
-        # )
-        # os.system(f"bash -lc '{cmd}'")
-        # print("t_file copied and processed with mtc.")
+        cmd = (
+            f'cd "{meshes_dir}" && '
+            f'module load cimlibxx/master && '
+            f'echo 0 | mtcexe object.t > /dev/null 2>&1'
+        )
+        os.system(f"bash -lc '{cmd}'")
+        print("t_file copied and processed with mtc.")
 
         return foil.surface
 
@@ -228,8 +228,8 @@ class airfoil():
             file.write(data_str + '\n')
         return('done writing rewards of env '+str(ep)+' in file')
 
-### Tests ###
-filepath = os.path.dirname(os.path.abspath(__file__))
-pbo = airfoil(filepath)
-action = np.array([-20.0])
-pbo.create_geometry(action,"object",0)
+# ### Tests ###
+# filepath = os.path.dirname(os.path.abspath(__file__))
+# pbo = airfoil(filepath)
+# action = np.array([-20.0])
+# pbo.create_geometry(action,"object")
