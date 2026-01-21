@@ -419,6 +419,11 @@ class airfoil():
 
         # ---------- 2) Build the foil in its private directory
         # IMPORTANT: pass unique suffix to avoid any basename collision
+        # Save original foil points before applying actions
+        naca0010_foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
+        naca0010_foil.generate_airfoil_points(random = False)
+        naca0010_foil.apply_translation(x_trans_domain,y_trans_domain)  
+
         foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
         foil.name = name  # 'object'
         foil.generate_airfoil_points(random=False)
@@ -426,41 +431,39 @@ class airfoil():
         if not naca0010 : 
             foil.apply_symmetrical_y_actions(actions)
         foil.apply_translation(x_trans_domain,y_trans_domain)
-        t_file_path = foil.sync()  # => geometry/mesh/{ep}/t/object_{ep}.t
         
         self.foil_area = foil.compute_surface() # Computes approximate area of the foil (polygon)
         if plot : foil.plot()
 
-        # Save original foil points before applying actions
-        naca0010_foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
-        naca0010_foil.generate_airfoil_points(random = False)
-        naca0010_foil.apply_translation(x_trans_domain,y_trans_domain)      
+        # Deform the original mesh with IDW according to actions
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="spline", density = 100, p = 2)
+
+        # Get every new control points & give it to foil.points()
+        foil.points = control_points
+        # Generate new .t file via sync() according to all control points
+        t_file_path = foil.sync()  # /geometry/mesh/{ep}/t/object_{ep}.t
 
         if not os.path.isfile(t_file_path):
-            raise FileNotFoundError(f"Foil.sync() did not create t-file at {t_file_path}")
+            raise FileNotFoundError(f"Method foil.sync() did not create t-file at {t_file_path}")
 
-        # ---------- 3) Copy to results/.../0/{ep}/cfd/meshes/object.t atomically
+        # Copy to results/.../0/{ep}/cfd/meshes/object.t
         meshes_dir = os.path.join(self.base_folder, self.path, str(ep), "cfd", "meshes")
         os.makedirs(meshes_dir, exist_ok=True)
         final_dst = os.path.join(meshes_dir, "object.t")
         tmp_dst = final_dst + ".tmp"
 
-        # Copy to a tmp name, then atomic rename to avoid partially written files
+        # Copy to a tmp name, then rename to avoid partially written files
         shutil.copyfile(t_file_path, tmp_dst)
         os.replace(tmp_dst, final_dst)
 
-        # ---------- 4) Run mtcexe (normals fix) in the same shell with module
-        # Use bash -lc so that 'module' function is available in sub-shell
-
-        cmd = (
-            f'cd "{meshes_dir}" && '
-            f'module load cimlibxx/master && '
-            f'echo 0 | mtcexe object.t > /dev/null 2>&1'
-        )
-        os.system(f"bash -lc '{cmd}'")
-
-        # Deform the original domain with IDW according to actions and control points position
-        new_domain_path = self.compute_idw_mesh(naca0010_foil, foil, ep, refine_type="spline", density = 100, p = 2)
+        # Run mtcexe
+        # cmd = (
+        #     f'cd "{meshes_dir}" && '
+        #     f'module load cimlibxx/master && '
+        #     f'echo 0 | mtcexe object.t > mtc_log.txt 2>&1'
+        # )
+        # os.system(f"bash -lc '{cmd}'")
+        # print("t_file copied and processed with mtc.")
 
         return foil.surface
 

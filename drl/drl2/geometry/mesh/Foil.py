@@ -343,7 +343,9 @@ class Foil:
         """
         Translates the whole airfoil by a given (x, y) vector.
         """
-        self.points = [(px + x, py + y) for px, py in self.points]
+        shape = np.array(self.points).shape
+        translation = np.array(np.full(shape, [x, y]))
+        self.points = self.points + translation
 
 
     def apply_rotation(self, angle):
