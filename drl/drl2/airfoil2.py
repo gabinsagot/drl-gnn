@@ -239,7 +239,7 @@ class airfoil():
         return('done writing rewards of env '+str(ep)+' in file')
 
 ### Tests ###
-filepath = os.path.dirname(os.path.abspath(__file__))
-pbo = airfoil(filepath)
-action = np.array([-20.0])
-pbo.create_geometry(action,"object",0)
+# filepath = os.path.dirname(os.path.abspath(__file__))
+# pbo = airfoil(filepath)
+# action = np.array([-20.0])
+# pbo.create_geometry(action,"object",0)
