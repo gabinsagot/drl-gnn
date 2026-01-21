@@ -1,2 +1,2 @@
 CompteurTemps	Temps	CxS	CyS	
-1	0	0.357122	0.0235554	
+1	0	0.486448	-0.132988	

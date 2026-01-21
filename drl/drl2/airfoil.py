@@ -42,13 +42,7 @@ class airfoil():
     
     ### CFD resolution
     def cfd_solve(self, x, ep):
-        """
-        Args: 
-            x: list of actions 
-            ep (int)
-        Returns: 
-            reward (float) : the reward
-        """
+
         ## Create folders and copy cfd folder
         self.output_path       = self.path+'/'+str(ep)+'/'
         self.vtu_path          = self.output_path+'/vtu/'
@@ -110,11 +104,11 @@ class airfoil():
         # Actions are taken in [-1;1], so transform to [0.05,1] (0.0 not possible in actions)
         actions = (0.45*actions)+0.55
 
-        print("Actions remappées sur [0,1] : ", actions)
+        # print("Actions remappées sur [0.05,1] : ", actions)
 
         # Convert actions
         conv_actions  = np.multiply(actions, self.physical_scale)
-        print("Actions converties en épaisseurs : ", conv_actions)
+        # print("Actions converties en épaisseurs : ", conv_actions)
 
         return conv_actions
 
@@ -161,11 +155,13 @@ class airfoil():
         foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
         foil.name = name  # 'object'
         foil.generate_airfoil_points(random=False)
-
+        print("POINTS DU FOIL AVT ACTION : ", foil.points)
         foil.apply_symmetrical_y_actions(actions) # Apply deformation actions
-        foil.apply_rotation(-4.0/180.0*np.pi) # Rotate slightly to give it some lift
+        print("POINTS DU FOIL APRES ACTION : ", foil.points)
+        foil.apply_rotation(-6.0/180.0*np.pi)
+        print("POINTS DU FOIL APRES ROT : ", foil.points)
         foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
-        t_file_path = foil.sync()  # /geometry/mesh/{ep}/t/object_{ep}.t
+        print("POINTS DU FOIL APRES TRANSLATION : ", foil.points)
 
         self.foil_area = foil.compute_surface() # Computes approximate area of the foil (polygons)
         if plot : foil.plot()
@@ -174,6 +170,16 @@ class airfoil():
         naca0010_foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
         naca0010_foil.generate_airfoil_points(random = False)
         naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
+
+
+
+        # Deform the original domain with IDW according to actions and control points position
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="spline", p = 3)
+        # Get every new control points & give it to foil.points()
+        foil.points = control_points
+
+        # Generate new .t file via sync()
+        t_file_path = foil.sync()  # /geometry/mesh/{ep}/t/object_{ep}.t
 
         if not os.path.isfile(t_file_path):
             raise FileNotFoundError(f"Method foil.sync() did not create t-file at {t_file_path}")
@@ -189,16 +195,13 @@ class airfoil():
         os.replace(tmp_dst, final_dst)
 
         # Run mtcexe
-        # cmd = (
-        #     f'cd "{meshes_dir}" && '
-        #     f'module load cimlibxx/master && '
-        #     f'echo 0 | mtcexe object.t > mtc_log.txt 2>&1'
-        # )
-        # os.system(f"bash -lc '{cmd}'")
-        # print("t_file copied and processed with mtc.")
-
-        # Deform the original mesh with IDW according to actions
-        new_domain_path = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, refine_type="spline", density = 100, p = 2)
+        cmd = (
+            f'cd "{meshes_dir}" && '
+            f'module load cimlibxx/master && '
+            f'echo 0 | mtcexe object.t > /dev/null 2>&1'
+        )
+        os.system(f"bash -lc '{cmd}'")
+        print("t_file copied and processed with mtc.")
 
         return foil.surface
 
@@ -213,21 +216,21 @@ class airfoil():
         print(data)
         cx0_value, cy0_value = avg_lift_drag(data, plot=False)
         sface_penalty = abs(0.065-self.surface) # Area gap to NACA0010
-        reward = cy0_value/cx0_value - sface_penalty  # Maximise lift/drag
+        reward = cy0_value/cx0_value - 8*sface_penalty  # Maximise lift/drag
 
         return reward
     
         ### To write rotations at each environment
     def write_actions(self,actions,ep):
         with open(self.path+'/../actions.txt','a') as file:
-            data_str = ' '.join( [str(ep)] + [str(deformation) for deformation in actions] )
+            data_str = ' '.join( [str(ep)] + [str(rotation) for rotation in actions] )
             file.write(data_str + '\n')
         return('done writing actions of env '+str(ep)+' in file')
 
     ### To write rotations at each environment
     def write_actions_alt(self,actions,ep):
         with open('actions_alt.txt','a') as file:
-            data_str = ' '.join( [str(ep)] + [str(deformation) for deformation in actions] )
+            data_str = ' '.join( [str(ep)] + [str(rotation) for rotation in actions] )
             file.write(data_str + '\n')
         return('done writing actions of env '+str(ep)+' in file')
 
