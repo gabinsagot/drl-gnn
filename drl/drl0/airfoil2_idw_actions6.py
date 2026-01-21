@@ -377,7 +377,7 @@ class airfoil():
             control_points = np.array(control_points)
 
             displacements = acp_displacements
-            print("All control points displacements with Bézier interpolation : ", displacements)
+            # print("All control points displacements with Bézier interpolation : ", displacements)
 
         if interp_type == "linear":
             init_acp, acp_displacements = self.artificial_cp(init_naca, end_naca, n=2)
@@ -571,11 +571,11 @@ filepath = os.path.dirname(os.path.abspath(__file__))
 pbo = airfoil(filepath)
 #actions = np.array([0.00105, 0.0105, 0.105, 0.0105, 0.105, 0.0105])
 actions = np.array([
-            0.05, 0.08, 0.08, 0.041, 0.004, #camber
+            0.05, 0.08, 0.08, 0.041, 0.08, #camber
             0.03, 0.07, 0.08, 0.08, 0.04,    #thickness
             -0.0                               #rotation
     ])
-pbo.create_geometry(actions, "object", plot = False, naca0010 = False)
+pbo.create_geometry(actions, "object", plot = True, naca0010 = False)
 
 
 

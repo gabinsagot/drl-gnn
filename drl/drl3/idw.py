@@ -376,7 +376,7 @@ def idw(mesh, control_points, init_displacements, p):
     #print(displacements)
 
     end_time = time.perf_counter()
-    print(f"IDW computation time: {end_time - start_time:.4f} seconds")
+    # print(f"IDW computation time: {end_time - start_time:.4f} seconds")
 
     return new_mesh            
 
