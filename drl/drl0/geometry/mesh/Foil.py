@@ -238,38 +238,39 @@ class Foil:
             None
         """
         N = (len(actions)-1)//2
-        print(f"N = {N}")
+        
         #The new foil will have len(self.points) = 2*(N+1)
         camber = actions[:N] #camber is of length N
-        print(f"Camber = {camber}, {np.shape(camber)}")
         thickness = actions[N:-1] #thickness is of length N-1
-        print(f"Thickness = {thickness}, {np.shape(thickness)}")
         rotation = actions[-1]
-        print(f"Rotation = {rotation}")
         origin = self.origin
+
+        # print(f"N = {N}")
+        # print(f"Camber = {camber}, {np.shape(camber)}")
+        # print(f"Thickness = {thickness}, {np.shape(thickness)}")
+        # print(f"Rotation = {rotation}")
 
         points = self.points
         new_points = np.array(points)
+
         if np.any(thickness < 0.0):
             raise ValueError("Thickness cannot be negative !")
         if len(camber) > origin-1 :
             raise ValueError("Action is too large, larger than the number of control points")
         if len(camber) < origin-1 :
             raise ValueError("Action is too short, shorter than the number of control points")
+        
         try:
             for i in range(N):
-                
                 c = camber[i]
-                print(f"Camber {i} : {c}")
-       
                 t = thickness[i]
-                print(f"Thickness {i} : {t}")
-
-                
                 new_points[i+1, 1] = c + t/2
                 new_points[-(i+3), 1] = c - t/2
-                print(f'Initial point {i+1} of coordinates {points[i+1, 1]} moved to {new_points[i+1, 1]}')
-                print(f'Initial point {-(i+3)%len(points)} of coordinates {points[-(i+3), 1]} moved to {new_points[-(i+3), 1]}')
+
+                # print(f"Camber {i} : {c}")
+                # print(f"Thickness {i} : {t}")
+                # print(f'Initial point {i+1} of coordinates {points[i+1, 1]} moved to {new_points[i+1, 1]}')
+                # print(f'Initial point {-(i+3)%len(points)} of coordinates {points[-(i+3), 1]} moved to {new_points[-(i+3), 1]}')
 
         except ValueError as e:
             print(f"Error: {e}")
@@ -350,15 +351,18 @@ class Foil:
 
     def apply_rotation(self, angle):
         """
-        Rotates the whole airfoil by a given angle in radians.
+        Rotates the whole airfoil by a given angle in radians around its center of mass.
         """
         cos_angle = np.cos(angle)
         sin_angle = np.sin(angle)
+        #Compute the coordinates of the center of mass
+        x_center = np.mean([x for x, y in self.points])
+        y_center = np.mean([y for x, y in self.points])
         rotated_points = []
-        for x, y in self.points:
-            x_rot = x * cos_angle - y * sin_angle
-            y_rot = x * sin_angle + y * cos_angle
-            rotated_points.append([x_rot, y_rot])
+        for x, y in self.points: #rotates around the center of mass
+            x_rot = x_center + (x - x_center) * cos_angle - (y - y_center) * sin_angle
+            y_rot = y_center + (x - x_center) * sin_angle + (y - y_center) * cos_angle
+            rotated_points.append((x_rot, y_rot))
         self.points = rotated_points
 
 
@@ -815,7 +819,7 @@ if TEST2:
     print(airfoil.points)
     airfoil.plot()
     airfoil.sync()
-    airfoil.apply_rotation(3.14)
+    airfoil.apply_rotation(-0.3)
     airfoil.plot()
     airfoil.sync()
 

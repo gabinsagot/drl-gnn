@@ -1,4 +1,4 @@
-// Fichier .geo généré à partir de C:\Users\gsagot\OneDrive - Université Paris Sciences et Lettres\TR Fluides\DRL - GNN\Gabin\drl-gnn\drl\drl3\geometry\mesh\0\txt\object_0.txt
+// Fichier .geo généré à partir de txt\new_transfo.txt
 h = 0.01;
 Point(1) = {3.4556467853426005, 1.7054828966522424, 0, h};
 Point(2) = {3.3012092171331524, 1.883000895811629, 0, h};
