@@ -429,16 +429,14 @@ class Foil:
                 f_out.write("Line(2) = {{1, {}, {}}};\n".format(point_id-1, point_id-2))
 
             if type == "spline":
-                L_attaque = [zero - 1, zero, zero + 1]
-                L_up = [i for i in range(1, zero)]
-                L_down = [i for i in range(zero + 1, point_id)] + [1]
+
 
                 L = [i for i in range(1, point_id-1)]
 
                 f_out.write("Spline(1) = " + str((L)).replace("[", "{").replace("]", "}") + ";\n")
                 f_out.write("Line(2) = {{1, {}, {}}};\n".format(point_id-1, point_id-2))
 
-            f_out.write("Curve Loop(1) = {-1, 2};\n")
+            f_out.write("Curve Loop(1) = {1, -2};\n")
             f_out.write("Plane Surface(1) = {1};\n")
 
         # print("Fichier .geo généré : {}".format(output_file))

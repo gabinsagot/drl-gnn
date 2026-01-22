@@ -338,7 +338,7 @@ def extract_points(t_file : str):
     return points
 
 
-def idw(mesh, control_points, init_displacements, p):
+def idw(mesh, control_points, init_displacements, p, take_edges=True):
     """
     Args :
         mesh : np.ndarray of shape (N, 2)
@@ -350,6 +350,24 @@ def idw(mesh, control_points, init_displacements, p):
         new_mesh : np.ndarray of shape (N, 2)
     """
     start_time = time.perf_counter()
+
+    H = max(mesh, key=lambda x: x[1])[1]  # hauteur
+    l = max(mesh, key=lambda x: x[0])[0]  # largeur (max x)
+    null = np.array([0.0, 0.0])
+
+    
+    def is_edge(point):
+        x, y = point[0], point[1]
+        # use isclose to avoid floating-point equality issues
+        return np.isclose(x, 0.0) or np.isclose(y, 0.0) or np.isclose(x, l) or np.isclose(y, H)
+    
+    if take_edges:
+        for point in mesh:
+            if is_edge(point):
+                control_points = np.vstack((control_points, point))
+                init_displacements = np.vstack((init_displacements, null))
+
+    distances = distance_matrix(mesh, control_points, threshold=1e8)
 
     distances = distance_matrix(mesh, control_points, threshold=int(1e8))
     #if there is a 0 in a line, it means the point is a control_point
@@ -486,42 +504,28 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 # TEST3 = 0
 # if TEST3:
 #     file = 'limace'
-#     L = extract_points('idw/limace.t')
+#     L = extract_points('../idw/limace.t')
 #     print("Points extracted.")
 #     i_1 = 9529
 #     i_2 = 100
 #     print(f"In {file}.t, line {i_1} = {L[i_1]}, line {i_2} = {L[i_2]}")
 
-#     # precompute bounds once to avoid O(N^2) behavior when checking each point
-#     H = max(L, key=lambda x: x[1])[1]  # hauteur
-#     l = max(L, key=lambda x: x[0])[0]  # largeur (max x)
-
-#     def is_edge(point):
-#         x, y = point[0], point[1]
-#         # use isclose to avoid floating-point equality issues
-#         return np.isclose(x, 0.0) or np.isclose(y, 0.0) or np.isclose(x, l) or np.isclose(y, H)
-    
-#     control_points = []
-#     for point in L:
-#         if is_edge(point):
-#             control_points.append(point)
-
 #     null = np.array([0.0, 0.0])
 #     shift = np.array([0.0, 0.06])
-#     displ = [null for _ in range(len(control_points))]
+#     control_points = []
+#     displ = []
 
 #     control_points.append(L[9529])
 
 #     print(f"Control points : {len(control_points)}")
 
-    
 #     displ.append(shift)
 
 #     print(f"Displacements : {len(displ)}")
 
 #     control_points = np.array(control_points)
 #     displ = np.array(displ)
-#     new_points = idw(L, control_points, displ, p=2)
+#     new_points = idw(L, control_points, displ, p=3.5)
 
 #     # show full precision in console
 
@@ -530,15 +534,15 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 #     print(f"{len(new_points)} points.") 
 
 #     print(f"In new_points, line {i_1} = {new_points[i_1]}, line {i_2} = {new_points[i_2]}")
-#     file = replace_points('idw/limace.t', new_points)
+#     file = replace_points('../idw/limace.t', '../idw/limace_idw.t', new_points)
     
 #     print(f".\n.\n.\nFile written: {file}")
-#     check = extract_points('idw/limace_idw.t')   
+#     check = extract_points('../idw/limace_idw.t')   
 #     print(f"In {file}, line {i_1} = {check[i_1]}, line {i_2} = {check[i_2]}")
 
 #     #move idw/limace.t into cfd_ex, and rename it test.t
 #     src = Path(file)  # 'file' was set earlier to 'idw/limace_idw.t'
-#     dest_dir = Path('idw/cfd_ex/meshes')
+#     dest_dir = Path('../idw/cfd_ex/meshes')
     
 #     dest = dest_dir / 'test.t'
 

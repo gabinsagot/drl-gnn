@@ -1,4 +1,4 @@
-// Fichier .geo gÃ©nÃ©rÃ© Ã  partir de txt\object.txt
+// Fichier .geo généré à partir de txt\object.txt
 h = 0.01;
 Point(1) = {3.49525871843117, 2.0031986982993435, 0, h};
 Point(2) = {3.490650801305535, 2.0046978906817543, 0, h};
