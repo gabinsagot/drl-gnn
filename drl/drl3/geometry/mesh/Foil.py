@@ -279,6 +279,7 @@ class Foil:
             print(f"Error: {e}")
 
         self.points = new_points
+        rotation = np.pi * rotation / 180.0  #convert degrees to radians
         self.apply_rotation(rotation)
 
         return 
