@@ -364,84 +364,36 @@ class Foil:
             rotated_points.append((x_rot, y_rot))
         self.points = rotated_points
 
+    def get_mesh(self):
+        msh_output = os.path.join(self.msh_dir, f"{self._base()}.msh")
+        try:
+            gmsh.initialize(sys.argv)
+            gmsh.option.setNumber("General.Verbosity", 1)
+            gmsh.option.setNumber("General.Terminal", 0)
 
-    def get_txt(self):
-        """
-        Creates a .txt file from the airfoil points, with one point (x,y) per line, and returns its file path.
-        """
-        file_path = os.path.join(self.txt_dir, f"{self._base()}.txt")
+            gmsh.model.add("object")
+            for i in range(len(self.points)):
+                gmsh.model.geo.addPoint(self.points[i][0], self.points[i][1], 0, self.msh_size, i)
+            
+            # Generate the points for the spline connection and the trailing edge line
+            spline_points = [i for i in range(len(self.points)-1)]
+            gmsh.model.geo.add_spline([len(self.points)-2, len(self.points)-1, 0], 1)
+            gmsh.model.geo.add_spline(spline_points, 2)
 
-        with open(file_path, "w") as f:
-            for x, y in self.points:
-                f.write("{}    {}\n".format(x, y))
-        return file_path
+            gmsh.model.geo.addCurveLoop([1, 2], 1)
+            gmsh.model.geo.addPlaneSurface([-1], 1)
+            gmsh.model.geo.synchronize()
 
-
-    def get_geo(self, 
-                h : float,
-                type : str = "spline"
-        ) -> str:
-        """
-        Creates a .geo file for GMSH from the airfoil points, and returns its file path.
-
-        Args:
-            input_file (str): The path to the input .txt file.
-            h (float): The mesh size.
-            type (str): The type of geometry to generate ("line" or "spline" or "bspline").
-
-        Returns:
-            str: The path to the generated .geo file.
-        """
-        
-        input_file = self.get_txt()
-        output_file = os.path.join(self.geo_dir, f"{self._base()}.geo")
-        with open(input_file, "r") as f_in, open(output_file, "w") as f_out:
-
-            f_out.write("// Fichier .geo généré à partir de {}\n".format(input_file))
-            f_out.write("h = {};\n".format(h))
-            point_id = 1
-            zero = 0
-
-            for line in f_in:
-
-                x_str, y_str = line.split()
-                x, y = float(x_str), float(y_str)
-                if (x, y) == (0.0, 0.0):
-                    zero = point_id
-                f_out.write("Point({}) = {{{}, {}, 0, h}};\n".format(point_id, x, y))
-                point_id += 1
-
-            if type == "line":
-                # On relie les points par des lignes
-                for i in range(1, point_id - 1):
-                    f_out.write("Line({}) = {{{}, {}}};\n".format(i, i, i + 1))
-                # On crée une ligne fermée
-                f_out.write("Line({}) = {{{}, 1}};\n".format(point_id - 1, point_id - 1))
-
-            if type == "bspline":
-                L_attaque = [zero - 1, zero, zero + 1]
-                L_up = [i for i in range(1, zero)]
-                L_down = [i for i in range(zero + 1, point_id)] + [1]
-
-                L = [i for i in range(1, point_id-1)]
-
-                f_out.write("BSpline(1) = " + str((L)).replace("[", "{").replace("]", "}") + ";\n")
-                f_out.write("Line(2) = {{1, {}, {}}};\n".format(point_id-1, point_id-2))
-
-            if type == "spline":
-
-
-                L = [i for i in range(1, point_id-1)]
-
-                f_out.write("Spline(1) = " + str((L)).replace("[", "{").replace("]", "}") + ";\n")
-                f_out.write("Line(2) = {{1, {}, {}}};\n".format(point_id-1, point_id-2))
-
-            f_out.write("Curve Loop(1) = {-1, 2};\n")
-            f_out.write("Plane Surface(1) = {-1};\n")
-
-        # print("Fichier .geo généré : {}".format(output_file))
-        return output_file
-
+            gmsh.option.setNumber("Mesh.MshFileVersion", 2.0)
+            gmsh.model.mesh.generate(2)
+            gmsh.write(msh_output)
+        finally:
+            # ensure finalize even on error
+            try:
+                gmsh.finalize()
+            except Exception:
+                pass
+        return 
 
     def get_mesh_windows(self):
         import subprocess
@@ -495,82 +447,35 @@ class Foil:
             os.chdir(original_dir)
 
         return msh_output
-    
-
-    def get_mesh(self):
-        geo_file_path = self.get_geo(self.msh_size, self.type)
-        msh_output = os.path.join(self.msh_dir, f"{self._base()}.msh")
-        try:
-            gmsh.initialize(sys.argv)
-            gmsh.option.setNumber("General.Verbosity", 1)
-            gmsh.option.setNumber("General.Terminal", 0)
-            gmsh.open(geo_file_path)
-            gmsh.option.setNumber("Mesh.MshFileVersion", 2.0)
-            gmsh.model.mesh.generate(2)
-            gmsh.write(msh_output)
-        finally:
-            # ensure finalize even on error
-            try:
-                gmsh.finalize()
-            except Exception:
-                pass
-        return msh_output
-
-
-    def get_t(self) -> None:
         
+    def convert_gmsh_to_mtc(self, input: str, output: str, verbose: bool = True) -> str:
         """
-        GMSH4MTC
+        Convert a gmsh mesh file to an mtc (.t) mesh file.
 
-        Utilitaire de conversion des maillages gmsh (.msh) de format 2 et 4
-        2D et 3D en format mtc (.t).
-        Fonctionne aussi desormais avec les fichiers stl.
-
-        Fonctionne pour les maillages surfaciques (2D et 3D) et volumiques.
-        Uniquement pour les éléments triangulaires, tetrahedriques.
-
-        maxime.renault@minesparis.psl.eu
-        06/2022
-
-        Inspiré du travail de Tommy Carozzani en 2010.
-       
-        Convert a GMSH mesh file from version 2 to version 4.
-
-        Args: 
-            input (str): The path to the input .msh file in gmsh format.
-            output (str): The path to the output .t file in mtc format.
-
-        Returns:
-            None
+        Args:
+        input (str): Path to the input gmsh mesh file.
+        output (str): Path to the output mtc mesh file.
+        verbose (bool): Print progress to stdout.
         """
-        #print("Initialisation...\n")
-        input = os.path.join(self.msh_dir, f"{self._base()}.msh")
-        output = os.path.join(self.t_dir, f"{self._base()}.t")
+        if verbose:
+            print("Initialisation...\n")
 
         with open(input) as f:
             f.readline()
-            """
             version = f.readline().split()[0]
             if len(version) > 1:
-                version = version.split('.')[0]
-            if version != '4' and version != '2':
-                print("This version of gmsh isn't supported")
-                sys.exit()
-            """
-            version = '2'
+                version = version.split(".")[0]
+            if version != "4" and version != "2":
+                raise ValueError("This version of gmsh isn't supported")
 
-            flags = {"$Nodes": [],
-                    "$EndNodes": [],
-                    "$Elements": [],
-                    "$EndElements": []}
+            flags = {"$Nodes": [], "$EndNodes": [], "$Elements": [], "$EndElements": []}
 
             connect_3d = []
             connect_2d = []
             connect_1d = []
 
-            ###########
-
-            #print("Getting position flags...\n")
+            if verbose:
+                print("Getting position flags...\n")
 
             t = f.readline()
 
@@ -578,221 +483,254 @@ class Foil:
                 t = t.strip("\t\n")
                 if t.startswith("$"):
                     for i in range(len(list(flags.keys()))):
-                        if(t == list(flags.keys())[i]):
+                        if t == list(flags.keys())[i]:
                             flags[t].append(f.tell())
                             break
                 t = f.readline()
 
-            ###########
+            if verbose:
+                print("Treating connectivities...\n")
 
-            #print("Treating connectivities...\n")
-
-            if version == '4':
+            if version == "4":
                 for index in range(len(flags["$Elements"])):
                     f.seek(flags["$Elements"][index])
 
-                    t = f.readline()    # line ignored (nb of elements)
+                    t = f.readline()  # line ignored (nb of elements)
                     t = f.readline()
 
-                    while (t and f.tell() != flags["$EndElements"][index]):
+                    while t and f.tell() != flags["$EndElements"][index]:
                         t = t.strip("\t\n").split()
 
-                        if(len(t) <= 1):
+                        if len(t) <= 1:
                             break
-                        
-                        if(t[2] != '2' and t[2] != '4'):
+
+                        if t[2] != "2" and t[2] != "4":
                             for i in range(int(t[-1])):
                                 f.readline()
-                        
-                        if(t[2] == '2'):    # triangle
+
+                        if t[2] == "2":  # triangle
                             for i in range(int(t[-1])):
                                 elem = f.readline().strip("\t\n").split()
                                 lig = [int(elem[1]), int(elem[2]), int(elem[3])]
                                 connect_2d.append(lig)
 
-                        if(t[2] == '4'):    # tetrahedron
+                        if t[2] == "4":  # tetrahedron
                             for i in range(int(t[-1])):
                                 elem = f.readline().strip("\t\n").split()
-                                lig = [int(elem[1]), int(elem[2]), int(elem[3]), int(elem[4])]
+                                lig = [
+                                    int(elem[1]),
+                                    int(elem[2]),
+                                    int(elem[3]),
+                                    int(elem[4]),
+                                ]
                                 connect_3d.append(lig)
 
                         t = f.readline()
 
-            if version == '2':
+            if version == "2":
                 for index in range(len(flags["$Elements"])):
                     f.seek(flags["$Elements"][index])
 
-                    t = f.readline()    # line ignored (nb of elements)
+                    t = f.readline()  # line ignored (nb of elements)
                     t = f.readline()
-                    
-                    while (t and f.tell() != flags["$EndElements"][index]):
+
+                    while t and f.tell() != flags["$EndElements"][index]:
                         t = t.split()
-                        
-                        if(len(t) <= 1):
+
+                        if len(t) <= 1:
                             break
 
-                        if(t[1] == '2'):    # triangle
+                        if t[1] == "2":  # triangle
                             lig = [int(t[-3]), int(t[-2]), int(t[-1])]
                             connect_2d.append(lig)
 
-                        if(t[1] == '4'):    # tetrahedron
+                        if t[1] == "4":  # tetrahedron
                             lig = [int(t[-4]), int(t[-3]), int(t[-2]), int(t[-1])]
                             connect_3d.append(lig)
-                            
+
                         t = f.readline()
 
-            connect_2d = np.array(connect_2d)
-            connect_3d = np.array(connect_3d)
+            # Correction for gmsh numbering
+            connect_2d = np.array(connect_2d, dtype=int) - 1
+            connect_3d = np.array(connect_3d, dtype=int) - 1
 
-            ###########
-
-            #print("Verifying nodes and edges...")
+            if verbose:
+                print("Verifying nodes and edges...")
 
             # nodes
 
             nodes = []
 
-            if version == '4':
+            if version == "4":
                 for index in range(len(flags["$Nodes"])):
                     f.seek(flags["$Nodes"][index])
-                    f.readline()    # line ignored (nb of nodes)
+                    f.readline()  # line ignored (nb of nodes)
 
                     t = f.readline()
 
-                    while (t and f.tell() != flags["$EndNodes"][index]):
+                    while t and f.tell() != flags["$EndNodes"][index]:
                         t = t.strip("\t\n").split()
-                        
-                        if(len(t) <= 1):
+
+                        if len(t) <= 1:
                             break
-                        
+
                         for i in range(int(t[-1])):
                             f.readline()
 
                         for i in range(int(t[-1])):
                             node = f.readline().strip("\t\n").split()
                             nodes.append([float(node[0]), float(node[1]), float(node[2])])
-                        
+
                         t = f.readline()
 
-            if version == '2':
+            if version == "2":
                 for index in range(len(flags["$Nodes"])):
                     f.seek(flags["$Nodes"][index])
-                    f.readline()    # line ignored (nb of nodes)
+                    f.readline()  # line ignored (nb of nodes)
 
                     t = f.readline()
 
-                    while (t and f.tell() != flags["$EndNodes"][index]):
+                    while t and f.tell() != flags["$EndNodes"][index]:
                         t = t.strip("\t\n").split()
-                        
-                        if(len(t) <= 1):
+
+                        if len(t) <= 1:
                             break
 
                         nodes.append([float(t[1]), float(t[2]), float(t[3])])
-                        
+
                         t = f.readline()
 
         nodes = np.array(nodes)
-        
+
         dim = 3
-        if(len(connect_3d) == 0):
-            if(np.all(nodes[:, 0] == nodes[0, 0])):
+        if len(connect_3d) == 0:
+            if np.all(nodes[:, 0] == nodes[0, 0]):
                 dim = 2
                 nodes = nodes[:, 1:]
-            elif(np.all(nodes[:, 1] == nodes[0, 1])):
+            elif np.all(nodes[:, 1] == nodes[0, 1]):
                 dim = 2
                 nodes = nodes[:, -1:1]
-            elif(np.all(nodes[:, 2] == nodes[0, 2])):
+            elif np.all(nodes[:, 2] == nodes[0, 2]):
                 dim = 2
                 nodes = nodes[:, :2]
             else:
                 dim = 2.5
 
         # Apparently Cimlib prefers normals looking down in 2D
-        if(dim == 2):
-            #print("   - Checking normals")  # Actually only checking the first normal
-            normal = np.cross(nodes[connect_2d[0][1]] - nodes[connect_2d[0][0]], nodes[connect_2d[0][2]] - nodes[connect_2d[0][0]])
-            if(normal > 0):
+        # If normals are still wrong after that, there may be foldovers in your mesh
+        if dim == 2:
+            if verbose:
+                print("   - Checking normals")  # Actually only checking the first normal
+            normal = np.cross(
+                nodes[connect_2d[0][1]] - nodes[connect_2d[0][0]],
+                nodes[connect_2d[0][2]] - nodes[connect_2d[0][0]],
+            )
+            if normal > 0:
                 connect_2d = connect_2d[:, [0, 2, 1]]
 
-        #print("   - Detecting edges")
+        if verbose:
+            print("   - Detecting edges")
 
         if dim == 3:
             del connect_2d
-            
+
             tris1 = connect_3d[:, [0, 2, 1]]  # Order is very important !
             tris2 = connect_3d[:, [0, 1, 3]]
             tris3 = connect_3d[:, [0, 3, 2]]
             tris4 = connect_3d[:, [1, 2, 3]]
-            
+
             tris = np.concatenate((tris1, tris2, tris3, tris4), axis=0)
-            tris_sorted = np.sort(tris, axis=1)  # creates a copy, may be source of memory error
-            tris_sorted, uniq_idx, uniq_cnt = np.unique(tris_sorted, axis=0, return_index=True, return_counts=True)
+            tris_sorted = np.sort(
+                tris, axis=1
+            )  # creates a copy, may be source of memory error
+            tris_sorted, uniq_idx, uniq_cnt = np.unique(
+                tris_sorted, axis=0, return_index=True, return_counts=True
+            )
             connect_2d = tris[uniq_idx][uniq_cnt == 1]
 
         if dim == 2:
             lin1 = connect_2d[:, [0, 1]]  # Once again, order is very important !
             lin2 = connect_2d[:, [2, 0]]
             lin3 = connect_2d[:, [1, 2]]
-            
+
             lin = np.concatenate((lin1, lin2, lin3), axis=0)
-            lin_sorted = np.sort(lin, axis=1)   # creates a copy, may be source of memory error
-            lin_sorted, uniq_idx, uniq_cnt = np.unique(lin_sorted, axis=0, return_index=True, return_counts=True)
+            lin_sorted = np.sort(
+                lin, axis=1
+            )  # creates a copy, may be source of memory error
+            lin_sorted, uniq_idx, uniq_cnt = np.unique(
+                lin_sorted, axis=0, return_index=True, return_counts=True
+            )
             connect_1d = lin[uniq_idx][uniq_cnt == 1]
-            
-        #print("   - Detecting unused nodes")
 
-        to_delete = np.arange(1, len(nodes) + 1)   # Every node index
-        used_elems = np.unique(np.concatenate((connect_3d.flat, connect_2d.flat)))   # Every index of USED nodes
+        if verbose:
+            print("   - Detecting unused nodes")
 
-        bools_keep = np.in1d(to_delete, used_elems)
-        to_delete = to_delete[~bools_keep]
-        del used_elems
+        used_nodes = np.unique(
+            np.concatenate((connect_3d.flatten(), connect_2d.flatten()))
+        )  # sorted
+        bools_keep = np.zeros(len(nodes), dtype=bool)
+        bools_keep[used_nodes] = True
 
-        #print("   - Deleting unused nodes\n")
+        if verbose:
+            print("   - Deleting unused nodes and reindexing\n")
 
         nodes = nodes[bools_keep]
-        del bools_keep
+        new_indices = np.cumsum(bools_keep) - 1
 
         if dim == 3 or dim == 2.5:
-            connect_3d.flat -= np.searchsorted(to_delete, connect_3d.flat, side='left')
-            connect_2d.flat -= np.searchsorted(to_delete, connect_2d.flat, side='left')
+            connect_3d = new_indices[connect_3d]
+            connect_2d = new_indices[connect_2d]
 
         if dim == 2:
-            connect_2d.flat -= np.searchsorted(to_delete, connect_2d.flat, side='left')
-            connect_1d.flat -= np.searchsorted(to_delete, connect_1d.flat, side='left')
-
-        ##########
+            connect_2d = new_indices[connect_2d]
+            connect_1d = new_indices[connect_1d]
 
         nb_elems = len(connect_2d) + len(connect_3d)
         if dim == 2:
             nb_elems += len(connect_1d)
-            #print("Nb elements 1d : " + str(len(connect_1d)))
+            if verbose:
+                print("Nb elements 1d : " + str(len(connect_1d)))
 
-        #print("Nb elements 2d : " + str(len(connect_2d)))
-        #print("Nb elements 3d : " + str(len(connect_3d)))
-        #print("Dimension : " + str(dim) + "\n")
+        if verbose:
+            print("Nb elements 2d : " + str(len(connect_2d)))
+            print("Nb elements 3d : " + str(len(connect_3d)))
+            print("Dimension : " + str(dim) + "\n")
+            print("Writing .t file...")
 
-        ###########
-
-        # print("Writing .t file...")
+        # Correction for mtc numbering
+        connect_3d += 1
+        connect_2d += 1
+        if len(connect_1d) > 0:
+            connect_1d += 1
 
         with open(output, "w") as fo:
-            lig = str(len(nodes)) + " " + str(dim) + " " + str(nb_elems) + " " + str(dim + 1) + "\n"
-            if(dim == 2.5):
+            lig = (
+                str(len(nodes))
+                + " "
+                + str(dim)
+                + " "
+                + str(nb_elems)
+                + " "
+                + str(dim + 1)
+                + "\n"
+            )
+            if dim == 2.5:
                 lig = str(len(nodes)) + " 3 " + str(nb_elems) + " 4\n"
             fo.write(lig)
 
             for node in nodes:
-                fo.write("{0:.16f} {1:.16f}".format(node[0], node[1]))
-                if(dim == 3 or dim == 2.5):
-                    fo.write(" {0:.16f}".format(node[2]))
+                fo.write("{0:.8g} {1:.8g}".format(node[0], node[1]))
+                if dim == 3 or dim == 2.5:
+                    fo.write(" {0:.8g}".format(node[2]))
                 fo.write(" \n")
 
             for e in connect_3d:
-                fo.write(str(e[0]) + " " + str(e[1]) + " " + str(e[2]) + " " + str(e[3]) + " \n")
+                fo.write(
+                    str(e[0]) + " " + str(e[1]) + " " + str(e[2]) + " " + str(e[3]) + " \n"
+                )
 
             for e in connect_2d:
-                if(dim == 3 or dim == 2.5):
+                if dim == 3 or dim == 2.5:
                     fo.write(str(e[0]) + " " + str(e[1]) + " " + str(e[2]) + " 0 \n")
                 else:
                     fo.write(str(e[0]) + " " + str(e[1]) + " " + str(e[2]) + " \n")
@@ -801,105 +739,12 @@ class Foil:
                 for e in connect_1d:
                     fo.write(str(e[0]) + " " + str(e[1]) + " 0 \n")
 
-        print(f".t file written at {output}.")
+        if verbose:
+            print("Done.")
         return output
 
     def sync(self) -> str:
         self.get_mesh()
-        return self.get_t()
-
-
-#TESTS
-TEST1 = 0
-if TEST1:
-    airfoil = Foil(20, 1.0, 1.0)
-    print(airfoil.points)
-    airfoil.plot()
-    airfoil.apply_transform_point(0, (0.01, -0.01), "translation", 0.05, "max_thickness")
-    airfoil.plot()
-
-TEST2 = 0
-if TEST2:
-    airfoil = Foil(10, 1.0, 1.0)
-    print(type(airfoil.points))
-    print(airfoil.points)
-    airfoil.plot()
-    airfoil.sync()
-    airfoil.apply_rotation(3.14)
-    airfoil.plot()
-    airfoil.sync()
-
-TEST3 = 0
-if TEST3:
-    airfoil = Foil(10, 1.0, 1.0)
-    n = 10
-    airfoil.apply_translation(2.5,2)
-    airfoil.plot()
-    airfoil.number_of_points = len(airfoil.points)
-    airfoil.name = f"object"
-    
-    airfoil.sync()
-    count = 0
-    while count < n:
-
-        t = airfoil.apply_transform_point(rd.randint(0, airfoil.number_of_points - 1), 
-                          (rd.uniform(-0.05, 0.05), rd.uniform(-0.05, 0.05)), 
-                          transformation="translation", 
-                          constraint_parameter=0.1)
-        if t>0:
-            #airfoil.plot()
-            airfoil.name = f"object{count}"
-            airfoil.sync()
-            count += 1
-
-TEST4 = 0
-if TEST4:
-    airfoil = Foil(10, 1.0, 1.0)
-    
-    airfoil.plot()
-    airfoil.number_of_points = len(airfoil.points)
-    airfoil.name = f"object"
-    airfoil.apply_translation(2.5,2)
-    airfoil.get_mesh_windows()
-    airfoil.get_t()
-
-TEST5 = 0
-# Surface computation test
-if TEST5:
-    airfoil = Foil(10, 1.0, 1.0)
-
-    airfoil.number_of_points = len(airfoil.points)
-    airfoil.name = f"object"
-    #airfoil.translate(2.5,2)
-    #airfoil.transform(2, (0.0, 0.15), "translation", 0.1)
-    #print(airfoil.compute_surface())
-    action = np.array([0.02, 0.04, 0.03, 0.027, 0.02, 0.08])
-    airfoil.apply_symmetrical_y_actions(action)
-    airfoil.plot()
-    airfoil.sync()
-
-TEST6 = 0
-if TEST6:
-    airfoil = Foil(10, 1.0, 1.0)
-    airfoil.plot()
-    actions = np.array([0.01405, 0.095, 0.085, 0.061, 0.058, 0.042])
-    airfoil.apply_symmetrical_y_actions(actions)
-    airfoil.plot()
-
-TEST7 = 0
-if TEST7:
-    airfoil = Foil(10, 1.0, 1.0)
-    airfoil.name = "new_transfo"
-    # points = airfoil.points
-    # print(f"Points: {len(points)}")
-    # print(f"points[0], points[1], points[13]: {points[0]}, {points[1]}, {points[13]}")
-    actions = np.array([
-            0.1, 0.12, 0.13, 0.07, 0.03, #camber
-            0.05, 0.1, 0.1, 0.1, 0.05,    #thickness
-            -0.3                               #rotation
-    ])
-    airfoil.camber_thickness(actions)
-    
-    airfoil.apply_translation(2.5,2)
-
-    print(airfoil.sync())
+        input = os.path.join(self.msh_dir, f"{self._base()}.msh")
+        output = os.path.join(self.t_dir, f"{self._base()}.t")
+        return self.convert_gmsh_to_mtc(input, output, True)
