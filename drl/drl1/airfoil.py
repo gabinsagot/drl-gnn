@@ -188,15 +188,7 @@ class airfoil():
             f'module load cimlibxx/master && '
             f'echo 0 | mtcexe object.t > /dev/null 2>&1'
         )
-        os.system(f"bash -lc '{cmd}'")
-
-        cmd2 = (
-            f'cd "{meshes_dir}" && '
-            f'module load cimlibxx/master && '
-            f'echo 0 | mtcexe domain.t > /dev/null 2>&1'
-        )
-        os.system(f"bash -lc '{cmd2}'")
-
+        # os.system(f"bash -lc '{cmd}'")
         print("t_file copied and processed with mtc.")
 
         return foil.surface
