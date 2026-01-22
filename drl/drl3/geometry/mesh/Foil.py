@@ -257,6 +257,10 @@ class Foil:
             raise ValueError("Camber is too large, larger than the number of control points")
         if len(camber) < origin-1 :
             raise ValueError("Camber is too short, shorter than the number of control points")
+        if len(thickness) > origin-1 :
+            raise ValueError("Thickness is too large, larger than the number of control points")
+        if len(thickness) < origin-1 :
+            raise ValueError("Thickness is too short, shorter than the number of control points")
         try:
             for i in range(N):
                 
