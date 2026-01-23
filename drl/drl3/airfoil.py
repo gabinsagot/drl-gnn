@@ -3,6 +3,8 @@ import os
 import shutil
 import time
 import numpy as np
+import subprocess
+from pathlib import Path
 
 # Import file for geometry creation
 from geometry.mesh.Foil import * # type: ignore
@@ -67,13 +69,35 @@ class airfoil():
             raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Probable self-intersecting surface, assigning bad reward")
 
         ## Solve problem using cimlib and move vtu and drag folder
+        cfd_path = self.base_folder + '/' + self.output_path + 'cfd'
+        try:
+            with open(cfd_path + "/logCFD.out", "w") as log:
+                subprocess.run(
+                    [
+                        "srun",
+                        "--exclusive",
+                        "-n", str(self.cores),
+                        "-t", str(self.timeout),
+                        str(Path("/home/gsagot/cimlib_CFD_driver")),
+                        "lanceur/Principale.mtc"
+                    ],
+                    cwd=cfd_path,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True
+                )
+        except Exception as e:
+            print(f"CFD did not start: {e}")
+
         cmd = (
             'cd ' + self.base_folder + '/' + self.output_path +
             'cfd && touch run.lock && mpirun -n ' + self.cores + ' --timeout ' + self.timeout +' '
             '' + self.base_folder + '/cimlib_CFD_driver lanceur/Principale.mtc > log.txt 2>&1'
         )
-        os.system(cmd)
+        #os.system(cmd)
         time.sleep(2)
+
+
         os.system('cp '+self.base_folder+'/'+self.output_path+'cfd/Resultats/*.txt '+self.base_folder+'/'+self.efforts_path+'.') # Copy the efforts.txt
         os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/Resultats/'+self.dim+'/* '+self.base_folder+'/'+self.vtu_path+'.') # Move vtu.s
         # os.system('rm -r '+self.base_folder+'/'+self.output_path+'cfd') # Remove the copied cfd folder
@@ -247,3 +271,4 @@ class airfoil():
             data_str = ' '.join( [str(ep)] + [str(val) for val in rewards] )
             file.write(data_str + '\n')
         return('done writing rewards of env '+str(ep)+' in file')
+    

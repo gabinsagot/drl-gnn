@@ -575,7 +575,23 @@ actions = np.array([
             0.03, 0.07, 0.08, 0.08, 0.04,    #thickness
             -0.0                               #rotation
     ])
-pbo.create_geometry(actions, "object", plot = True, naca0010 = False)
+
+filepath = os.path.dirname(os.path.abspath(__file__))
+pbo = airfoil(filepath)
+actions = np.array([
+        0.1, 0.12, 0.13, 0.07, 0.03, #camber
+        0.05, 0.1, 0.1, 0.1, 0.05,   #thickness
+        -0.3                         #rotation
+])
+
+action8 = np.array([0.12834850663760586, 0.02500000000000001, 0.1046007149217617, 0.08596053550893273, 0.03032417419335849, 
+                    0.12834850663760586, 0.020000000000000007, 0.1046007149217617, 0.11461404734524366, 0.03032417419335849, 
+                    -9.448621960899189])
+pbo.create_geometry(action8,"object8", plot=True)
+pbo.cfd_solve()
+
+
+#pbo.create_geometry(action8, "object8", plot = True, naca0010 = False)
 
 
 
