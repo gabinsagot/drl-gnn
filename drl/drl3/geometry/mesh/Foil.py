@@ -371,6 +371,7 @@ class Foil:
 
 
     def get_mesh(self):
+        geo_output = os.path.join(self.geo_dir, f"{self._base()}.geo")
         msh_output = os.path.join(self.msh_dir, f"{self._base()}.msh")
         try:
             gmsh.initialize(sys.argv)
@@ -389,15 +390,20 @@ class Foil:
             gmsh.model.geo.addCurveLoop([1, 2], 1)
             gmsh.model.geo.addPlaneSurface([-1], 1)
             gmsh.model.geo.synchronize()
+            #gmsh.write(geo_output)
+
 
             gmsh.option.setNumber("Mesh.MshFileVersion", 2.0)
             gmsh.model.mesh.generate(2)
             gmsh.write(msh_output)
+
+
         finally:
             # ensure finalize even on error
             try:
                 gmsh.finalize()
-            except Exception:
+            except Exception as e:
+                print(f"Error finalizing GMSH: {e}")
                 pass
         return 
         
@@ -701,3 +707,4 @@ class Foil:
         input = os.path.join(self.msh_dir, f"{self._base()}.msh")
         output = os.path.join(self.t_dir, f"{self._base()}.t")
         return self.convert_gmsh_to_mtc(input, output, False)
+
