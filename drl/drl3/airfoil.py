@@ -30,15 +30,13 @@ class airfoil():
         self.x_0      = np.array([np.random.rand((1)) for i in range(self.act_size)])   # initial action
 
         # Remap to physical scale:
-        self.physical_scale = np.array([0.2, 0.25, 0.2, 0.15, 0.1,      # Camber limits
+        self.physical_scale = np.array([0.1, 0.15, 0.2, 0.15, 0.1,      # Camber limits
                                         0.2, 0.2, 0.2, 0.2, 0.1,        # Thickness limits
                                         45])                            # Rotation limit
         
         self.bad_rwrd = -2000
         self.cores    = '8'  #num of cores per env 
         self.dim      = '2d'
-        self.dt       = 0.05 # using 1 because 3D uses varying dt, dt at the end is 0.1
-        self.window   = [149.99,250.01] # Time window for drag/lift calculus. Corresponds to [175,200], but increment numbers differ due to varying dt in cfd
         self.timeout  = '3600'      # timeout limit in seconds (s) -> 1h
 
         self.foil_area = 0.0                        # Airfoil area initialization
@@ -54,9 +52,6 @@ class airfoil():
         self.vtu_path          = self.output_path+'/vtu/'
         self.efforts_path   = self.output_path+'Efforts/'
 
-        # print("Base folder : ", self.base_folder)
-        # print("Self.path : ", self.path)
-
         os.makedirs(self.vtu_path, exist_ok= True)
         os.makedirs(self.efforts_path, exist_ok= True)
         os.system('cp -r cfd ' + self.base_folder + '/' + self.output_path + '.')
@@ -69,9 +64,7 @@ class airfoil():
         try:
             self.surface = self.create_geometry(x, name, ep)
         except Exception as e:
-            raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Self-intersecting surface, assigning bad reward")
-
-        print("TEST ERREUR; NE DOIT PAS AFFICHER SI ERROR")
+            raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Probable self-intersecting surface, assigning bad reward")
 
         ## Solve problem using cimlib and move vtu and drag folder
         cmd = (
@@ -88,7 +81,7 @@ class airfoil():
         # Reward
         self.reward = self.compute_reward()
         self.write_rewards([self.reward],ep)
-        print(f"Reward for episode {ep} : ", self.reward)
+        # print(f"Reward for episode {ep} : ", self.reward)
 
         ## Increment episode
         self.episode += 1
@@ -106,7 +99,10 @@ class airfoil():
         except Exception as e:
             print("\n !!! cfd_solve() function failed !!!", e, flush=True)
             conv_actions = locals().get("conv_actions", np.zeros(self.act_size))
-            return self.bad_rwrd, conv_actions
+            self.reward = self.bad_rwrd
+            self.write_rewards([self.reward],ep)
+
+            return self.reward, conv_actions
     
         return reward, conv_actions
 
@@ -127,7 +123,7 @@ class airfoil():
         # Convert actions
         #print("Actions remapped avant physical scale : ", actions)
         conv_actions  = np.multiply(actions, self.physical_scale)
-        print("Actions converties au physical scale : ", conv_actions)
+        # print("Actions converties au physical scale : ", conv_actions)
 
         return conv_actions
 
@@ -187,7 +183,7 @@ class airfoil():
         naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
 
         # Deform the original domain with IDW according to actions and control points position
-        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="spline", p = 3)
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", p = 3)
         # Get every new control points & give it to foil.points()
         foil.points = control_points
 
@@ -214,7 +210,7 @@ class airfoil():
             f'echo 0 | mtcexe object.t > /dev/null 2>&1'
         )
         # os.system(f"bash -lc '{cmd}'")
-        print("t_file copied and processed with mtc.")
+        # print("t_file copied and processed with mtc.")
 
         return foil.surface
 
@@ -224,12 +220,10 @@ class airfoil():
         """Compute the reward for the episode (ep) based on the forces data."""
 
         file_path = os.path.join(self.base_folder, f"{self.efforts_path}Efforts.txt")
-        print(file_path)
         data = read_lift_drag(file_path)
-        print(data)
         cx0_value, cy0_value = avg_lift_drag(data, plot=False)
-        sface_penalty = abs(0.065-self.surface) # Area gap to NACA0010
-        reward = cy0_value/cx0_value - 8*sface_penalty  # Maximise lift/drag
+        sface_penalty = (0.065-self.surface)**2 # Area gap to NACA0010
+        reward = cy0_value/(cx0_value)**2 - 100*sface_penalty  # Maximise lift/drag
 
         return reward
     

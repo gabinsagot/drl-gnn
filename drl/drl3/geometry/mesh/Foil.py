@@ -400,59 +400,6 @@ class Foil:
             except Exception:
                 pass
         return 
-
-    def get_mesh_windows(self):
-        import subprocess
-        
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        tmp_msh_dir = os.path.join(script_dir, "tmp_msh_files")
-        os.makedirs(tmp_msh_dir, exist_ok=True)
-
-        geo_file = self.get_geo(self.msh_size, self.type)
-        tmp_msh_file = os.path.join(tmp_msh_dir, f"{self.name}.msh")
-
-        copy(geo_file, tmp_msh_file)
-        
-        msh_dir = os.path.join(script_dir, "msh_files")
-        os.makedirs(msh_dir, exist_ok=True)
-        
-        msh_output = os.path.join(msh_dir, f"{self.name}.msh")
-        
-        # Write mesh commands to the file
-        with open(tmp_msh_file, "a") as f_out:
-            f_out.write(f"Mesh 2;\nSave \"{msh_output}\";\n")
-        
-        gmsh_exe = shutil.which("gmsh")
-        if gmsh_exe is None:
-            raise RuntimeError("gmsh not found in PATH")
-        print(f"Using gmsh at: {gmsh_exe}")
-        
-        original_dir = os.getcwd()
-        
-        try:
-            os.chdir(script_dir)
-            rel_output = os.path.join("tmp_msh_files", f"{self.name}.msh")
-            rel_msh_output = os.path.join("msh_files", f"{self.name}.msh")
-            
-            result = subprocess.run(
-                [gmsh_exe, rel_output, "-2", "-o", rel_msh_output],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode == 0:
-                #print(f".msh file generated: {msh_output}")
-                pass
-            else:
-                print(f"GMSH FAILED with return code {result.returncode} for episode {self.suffix}")
-                print(f"STDOUT:\n{result.stdout}")
-                print(f"STDERR:\n{result.stderr}")
-                raise RuntimeError(f"GMSH failed to generate mesh")
-            
-        finally:
-            os.chdir(original_dir)
-
-        return msh_output
         
     def convert_gmsh_to_mtc(self, input: str, output: str, verbose: bool = True) -> str:
         """
@@ -753,4 +700,4 @@ class Foil:
         self.get_mesh()
         input = os.path.join(self.msh_dir, f"{self._base()}.msh")
         output = os.path.join(self.t_dir, f"{self._base()}.t")
-        return self.convert_gmsh_to_mtc(input, output, True)
+        return self.convert_gmsh_to_mtc(input, output, False)
