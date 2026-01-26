@@ -253,8 +253,8 @@ class airfoil():
             cx0_value, cy0_value = avg_lift_drag(data, plot=False)
         except Exception as e:
             raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
-        sface_penalty = (0.080-self.surface)**2 # Area gap to ~NACA0010
-        reward = 10*(np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 20*sface_penalty)  # Maximise foil endurance
+        sface_penalty = np.abs(0.100-self.surface) # Area gap to target area
+        reward = 10*(np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 2*sface_penalty)  # Maximise foil endurance under area constraints
 
         return reward
     
