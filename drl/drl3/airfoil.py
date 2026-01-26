@@ -32,7 +32,7 @@ class airfoil():
 
         # Remap to physical scale:
         self.physical_scale = np.array([0.1, 0.15, 0.2, 0.15, 0.1,      # Camber limits
-                                        0.2, 0.2, 0.2, 0.2, 0.2,        # Thickness limits
+                                        0.05, 0.2, 0.2, 0.2, 0.2,        # Thickness limits
                                         45])                            # Rotation limit
         
         self.bad_rwrd = -50.0
@@ -96,7 +96,7 @@ class airfoil():
         time.sleep(2)
         os.system('cp '+self.base_folder+'/'+self.output_path+'cfd/Resultats/*.txt '+self.base_folder+'/'+self.efforts_path+'.') # Copy the efforts.txt
         os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/Resultats/'+self.dim+'/* '+self.base_folder+'/'+self.vtu_path+'.') # Move vtu.s
-        # os.system('rm -r '+self.base_folder+'/'+self.output_path+'cfd') # Remove the copied cfd folder
+        os.system('rm -r '+self.base_folder+'/'+self.output_path+'cfd') # Remove the copied cfd folder
 
         # Reward
         self.reward = self.compute_reward()
@@ -134,7 +134,8 @@ class airfoil():
         actions[:5] = (0.45*actions[:5])+0.55        
         # Positive thicknesses: remap to [0.05, 1]
         actions[5:10] = (0.45*actions[5:10])+0.55  
-
+        # Negative rotation to generate lift
+        actions[10] = 0.5*(actions[10]-1.0)
         # Convert actions
         #print("Actions remapped avant physical scale : ", actions)
         conv_actions  = np.multiply(actions, self.physical_scale)
@@ -252,7 +253,7 @@ class airfoil():
             cx0_value, cy0_value = avg_lift_drag(data, plot=False)
         except Exception as e:
             raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
-        sface_penalty = (0.200-self.surface)**2 # Area gap to NACA0010
+        sface_penalty = (0.080-self.surface)**2 # Area gap to ~NACA0010
         reward = 10*(np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 20*sface_penalty)  # Maximise foil endurance
 
         return reward
