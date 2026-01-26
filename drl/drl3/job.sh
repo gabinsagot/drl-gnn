@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-#SBATCH --job-name=foil_drl
+#SBATCH --job-name=drl3_100
 #SBATCH --output=log.out
+#SBATCH --error=log.err
 #SBATCH --partition=MAIN
 #SBATCH --qos=calcul
 #

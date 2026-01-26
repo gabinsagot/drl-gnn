@@ -1,2 +1,2 @@
 CompteurTemps	Temps	CxS0	CyS0	
-1	0	0.470757	0.121518	
+1	0	0.442859	0.0593637	

@@ -3,7 +3,7 @@
     "env_name": "airfoil",
     "pdf": "cma-full",
     "avg_type": "linear",
-    "n_gen": 4,
+    "n_gen": 48,
     "n_ind": 8,
     "n_avg": 1,
     "n_cpu": 8,

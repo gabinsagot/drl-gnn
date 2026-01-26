@@ -4,7 +4,6 @@ import shutil
 import time
 import numpy as np
 import subprocess
-from pathlib import Path
 
 # Import file for geometry creation
 from geometry.mesh.Foil import * # type: ignore
@@ -18,7 +17,7 @@ class airfoil():
 
     ### Create object
     def __init__(self, path):
-
+        
         # Fill structure
         self.name     = 'airfoil'
         self.base_folder = os.getcwd()
@@ -39,7 +38,7 @@ class airfoil():
         self.bad_rwrd = -2000
         self.cores    = '8'  #num of cores per env 
         self.dim      = '2d'
-        self.timeout  = '3600'      # timeout limit in seconds (s) -> 1h
+        self.timeout  = '60'      # timeout limit in seconds (s) -> 1min
 
         self.foil_area = 0.0                        # Airfoil area initialization
 
@@ -60,44 +59,41 @@ class airfoil():
 
         self.write_actions(x,ep) # Saves action(s) to a file, already remapped to physical scale at this stage
 
-        name = "object"
-
         # Try to build geometry. If it fails, raise error and exit cfd_solve to assign bad reward
         try:
+            name = "object"
             self.surface = self.create_geometry(x, name, ep)
         except Exception as e:
-            raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Probable self-intersecting surface, assigning bad reward")
+            raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Assigning bad reward")
+        
+        t_file_path = os.path.join(self.base_folder, self.output_path, 'cfd/meshes/object.t')
+        if not os.path.isfile(t_file_path):
+            print(f"WARNING : The final .t file is not found in {t_file_path}")
+            raise ValueError(f"Failed to materialize {t_file_path}")
 
         ## Solve problem using cimlib and move vtu and drag folder
         cfd_path = self.base_folder + '/' + self.output_path + 'cfd'
         try:
-            with open(cfd_path + "/logCFD.out", "w") as log:
+            with open(cfd_path + "/logCFD.txt", "w") as log:
                 subprocess.run(
                     [
                         "srun",
                         "--exclusive",
                         "-n", str(self.cores),
                         "-t", str(self.timeout),
-                        str(Path("/home/gsagot/cimlib_CFD_driver")),
+                        str(self.base_folder + "/cimlib_CFD_driver"),
                         "lanceur/Principale.mtc"
                     ],
                     cwd=cfd_path,
                     stdout=log,
                     stderr=subprocess.STDOUT,
-                    check=True
+                    check=True,
+                    timeout=int(self.timeout)
                 )
         except Exception as e:
-            print(f"CFD did not start: {e}")
+            raise ValueError(f"ERROR: CFD simulation did not start at episode {ep}: {e}. Check {cfd_path}/logCFD.txt for details.")
 
-        cmd = (
-            'cd ' + self.base_folder + '/' + self.output_path +
-            'cfd && touch run.lock && mpirun -n ' + self.cores + ' --timeout ' + self.timeout +' '
-            '' + self.base_folder + '/cimlib_CFD_driver lanceur/Principale.mtc > log.txt 2>&1'
-        )
-        #os.system(cmd)
         time.sleep(2)
-
-
         os.system('cp '+self.base_folder+'/'+self.output_path+'cfd/Resultats/*.txt '+self.base_folder+'/'+self.efforts_path+'.') # Copy the efforts.txt
         os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/Resultats/'+self.dim+'/* '+self.base_folder+'/'+self.vtu_path+'.') # Move vtu.s
         # os.system('rm -r '+self.base_folder+'/'+self.output_path+'cfd') # Remove the copied cfd folder
@@ -121,28 +117,24 @@ class airfoil():
         try:
             reward = self.cfd_solve(conv_actions, ep)
         except Exception as e:
-            print("\n !!! cfd_solve() function failed !!!", e, flush=True)
+            print("\n ERROR in cfd_solve(): ", e, flush=True)
             conv_actions = locals().get("conv_actions", np.zeros(self.act_size))
             self.reward = self.bad_rwrd
             self.write_rewards([self.reward],ep)
 
-            return self.reward, conv_actions
-    
+        reward = self.reward
+        print(f"End of episode {ep} with reward {reward}.", flush=True)
         return reward, conv_actions
 
 
     ### Convert actions
     def convert_actions(self, actions):
 
-        a = np.array([0.2, 0.25, 0.2, 0.15, 0.1,      # Camber limits
-                                0.2, 0.2, 0.2, 0.2, 0.2,        # Thickness limits
-                                45])                            # Rotation limit
-
         # Actions are taken in [-1;1], so transform according to expected action form in apply_xxx foil methods
         # Positive camber values (more or less concave): remap to [0.05, 1]
-        actions[:5] = (0.45*actions[5:10])+0.55        
-        # Positive thicknesses: remap to [0.05, 1]
-        actions[5:10] = (0.45*actions[5:10])+0.55
+        actions[:5] = (0.45*actions[:5])+0.55        
+        # Positive thicknesses: remap to [0.75, 1]
+        actions[5:10] = (0.45*actions[5:10])+0.55  
 
         # Convert actions
         #print("Actions remapped avant physical scale : ", actions)
@@ -191,7 +183,7 @@ class airfoil():
         y_trans_domain = 2.0
 
         # Build the foil
-        foil = Foil(10, 1.0, 1.0, work_dir=episode_root, suffix=f"_{ep}")
+        foil = Foil(10, 1.0, 1.0, work_dir=episode_root, name = name, suffix=f"_{ep}")
         foil.name = name  # 'object'
         foil.generate_airfoil_points(random=False)
         foil.apply_camber_thickness(actions) # Apply deformation actions
@@ -211,21 +203,33 @@ class airfoil():
         # Get every new control points & give it to foil.points()
         foil.points = control_points
 
-        # Generate new .t file via sync()
-        t_file_path = foil.sync()  # /geometry/mesh/{ep}/t/object_{ep}.t
+        # Generate new .t file via get_mesh and get_t
+        try :
+            geo_path = foil.get_geo()
+            msh_path = foil.get_mesh_timeout(geo_path, timeout=5)
+        except Exception as e:
+            raise RuntimeError(f"Unable to mesh geometry at episode {ep} : {e}") from e
+        try :
+            t_file_path = os.path.join(episode_root, "t", f"{name}_{ep}.t")
+            foil.convert_gmsh_to_mtc(msh_path, t_file_path, False)  # /geometry/mesh/{ep}/t/object_{ep}.t
+        except Exception as e:
+            raise RuntimeError(f"Unable to build .t file at episode {ep} : {e}")
+        
+        try :
+            # Copy to results/.../0/{ep}/cfd/meshes/object.t
+            meshes_dir = os.path.join(self.base_folder, self.path, str(ep), "cfd", "meshes")
+            os.makedirs(meshes_dir, exist_ok=True)
+            final_dst = os.path.join(meshes_dir, "object.t")
+            tmp_dst = final_dst + ".tmp"
 
-        if not os.path.isfile(t_file_path):
-            raise FileNotFoundError(f"Method foil.sync() did not create t-file at {t_file_path}")
+            # Copy to a tmp name, then rename to avoid partially written files
+            shutil.copyfile(t_file_path, tmp_dst)
+            os.replace(tmp_dst, final_dst)
 
-        # Copy to results/.../0/{ep}/cfd/meshes/object.t
-        meshes_dir = os.path.join(self.base_folder, self.path, str(ep), "cfd", "meshes")
-        os.makedirs(meshes_dir, exist_ok=True)
-        final_dst = os.path.join(meshes_dir, "object.t")
-        tmp_dst = final_dst + ".tmp"
-
-        # Copy to a tmp name, then rename to avoid partially written files
-        shutil.copyfile(t_file_path, tmp_dst)
-        os.replace(tmp_dst, final_dst)
+        finally :
+            if not os.path.isfile(final_dst):
+                print(f"WARNING : The final name.t is not found in {final_dst}", flush=True)
+                raise FileNotFoundError(f"Failed to materialize {final_dst}")
 
         # Run mtcexe
         cmd = (
@@ -244,10 +248,13 @@ class airfoil():
         """Compute the reward for the episode (ep) based on the forces data."""
 
         file_path = os.path.join(self.base_folder, f"{self.efforts_path}Efforts.txt")
-        data = read_lift_drag(file_path)
-        cx0_value, cy0_value = avg_lift_drag(data, plot=False)
+        try:
+            data = read_lift_drag(file_path)
+            cx0_value, cy0_value = avg_lift_drag(data, plot=False)
+        except Exception as e:
+            raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
         sface_penalty = (0.065-self.surface)**2 # Area gap to NACA0010
-        reward = cy0_value/(cx0_value)**2 - 100*sface_penalty  # Maximise lift/drag
+        reward = np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 100*sface_penalty  # Maximise foil endurance
 
         return reward
     
