@@ -250,7 +250,7 @@ class airfoil():
         except Exception as e:
             raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
         sface_penalty = (0.065-self.surface)**2 # Area gap to NACA0010
-        reward = np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 100*sface_penalty  # Maximise foil endurance
+        reward = -np.abs(cx0_value) - 8*sface_penalty  # Minimize drag
 
         return reward
     

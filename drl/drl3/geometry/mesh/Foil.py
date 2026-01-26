@@ -94,6 +94,7 @@ class Foil:
             self.msh_dir = os.path.join(self.work_dir, "msh")
             self.t_dir   = os.path.join(self.work_dir, "t")
             self.tmp_msh_dir = os.path.join(self.work_dir, "tmp_msh")
+        print(f"geo dir: {self.geo_dir}")
         for d in (self.txt_dir, self.geo_dir, self.msh_dir, self.t_dir, self.tmp_msh_dir):
             os.makedirs(d, exist_ok=True)
 
@@ -401,7 +402,8 @@ class Foil:
             raise RuntimeError("gmsh Python API was unable to build .geo file.")
         finally:
             gmsh.finalize()
-        return geo_output      
+        print(f"geo output: {geo_output}")
+        return geo_output
 
 
     def get_mesh_timeout(self, geo_input: str, timeout: int = 60) -> str:
@@ -742,7 +744,9 @@ class Foil:
         return output
 
     def sync(self) -> str:
-        self.get_mesh()
+        geo_file = self.get_geo()
+        self.get_mesh_timeout(geo_file)
         input = os.path.join(self.msh_dir, f"{self._base()}.msh")
         output = os.path.join(self.t_dir, f"{self._base()}.t")
         return self.convert_gmsh_to_mtc(input, output, False)
+
