@@ -1,8 +1,7 @@
 import os
-from shutil import copy
-import shutil
 import sys
 import gmsh
+import multiprocessing
 import subprocess
 import numpy as np
 import random as rd
@@ -56,7 +55,7 @@ def _is_self_intersecting(pts):
 class Foil:
 
     def __init__(self, number_of_points, chord_length_multiplier, thickness_multiplier,
-                 work_dir: str = "", suffix: str = ""):
+                 work_dir: str = "", name : str = "object", suffix: str = ""):
         """
         work_dir: base directory for this instance (e.g., geometry/mesh/{ep})
                   Files will be written under work_dir/{txt,geo,msh,t}.
@@ -71,7 +70,7 @@ class Foil:
         self.points = np.array(self.generate_airfoil_points())
         self.origin = self.points[:, :1].argmin()  # Furthest left point
         self.surface = self.compute_surface()
-        self.name = "object"  # base name without suffix
+        self.name = name  # base name without suffix
         self.suffix = suffix
         # ---- new: episode-local work area
         self.work_dir = work_dir  # e.g., geometry/mesh/{ep}
@@ -79,7 +78,8 @@ class Foil:
 
     # ---- new: directory resolver
     def _init_dirs(self):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = self.script_dir
         if self.work_dir is None:
             # backward compatible layout
             self.txt_dir = os.path.join(script_dir, "txt_files")
@@ -370,13 +370,18 @@ class Foil:
         self.points = rotated_points
 
 
-    def get_mesh(self):
-        geo_output = os.path.join(self.geo_dir, f"{self._base()}.geo")
-        msh_output = os.path.join(self.msh_dir, f"{self._base()}.msh")
+    def get_geo(self):
+        """
+        Generates .geo file of the foil's geometry
+        
+        Returns : path (str) to the created .geo
+        """
+        geo_output = os.path.join(self.geo_dir, f"{self._base()}.geo_unrolled")
         try:
             gmsh.initialize(sys.argv)
-            gmsh.option.setNumber("General.Verbosity", 1)
-            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.option.setNumber("General.Verbosity", 2)
+            gmsh.option.setNumber("General.Terminal", 1)
+            gmsh.option.setNumber("General.AbortOnError", 1)  # 1 = raise on error
 
             gmsh.model.add("object")
             for i in range(len(self.points)):
@@ -389,24 +394,58 @@ class Foil:
 
             gmsh.model.geo.addCurveLoop([1, 2], 1)
             gmsh.model.geo.addPlaneSurface([-1], 1)
+
             gmsh.model.geo.synchronize()
-            #gmsh.write(geo_output)
-
-
-            gmsh.option.setNumber("Mesh.MshFileVersion", 2.0)
-            gmsh.model.mesh.generate(2)
-            gmsh.write(msh_output)
-
-
+            gmsh.write(geo_output)
+        except:
+            raise RuntimeError("gmsh Python API was unable to build .geo file.")
         finally:
-            # ensure finalize even on error
-            try:
-                gmsh.finalize()
-            except Exception as e:
-                print(f"Error finalizing GMSH: {e}")
-                pass
-        return 
+            gmsh.finalize()
+        return geo_output      
+
+
+    def get_mesh_timeout(self, geo_input: str, timeout: int = 60) -> str:
+        """
+        Meshing via a separate Python interpreter that imports gmsh.
+        Works inside daemonic processes. Enforces a hard timeout.
+        """
+        msh_output = os.path.join(self.msh_dir, f"{self._base()}.msh")
+        os.makedirs(self.msh_dir, exist_ok=True)
+
+        if not os.path.isfile(geo_input):
+            raise FileNotFoundError(f".geo not found: {geo_input}")
+
+        # Remove stale output
+        try:
+            if os.path.exists(msh_output):
+                os.remove(msh_output)
+        except Exception:
+            pass
+
+        cmd = [sys.executable, "mesh_worker.py", geo_input, msh_output]
+        working_dir = self.script_dir
+        try:
+            res = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                check=False,
+                cwd=working_dir,
+            )
+
+            print(res.stdout, flush=True)   # lands in job.out
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(f"Gmsh meshing timed out after {timeout}s")
+
+        if (not os.path.isfile(msh_output)): # or os.path.getsize(msh_output) == 0:
+            raise RuntimeError("Gmsh produced no .msh file")
         
+        
+        if res.returncode != 0:
+            raise RuntimeError(f"Worker failed (rc={res.returncode})")
+        return msh_output
+
     def convert_gmsh_to_mtc(self, input: str, output: str, verbose: bool = True) -> str:
         """
         Convert a gmsh mesh file to an mtc (.t) mesh file.
