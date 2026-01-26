@@ -2,7 +2,7 @@
 import os
 import time
 import numpy as np
-
+import subprocess
 # Import file for geometry creation
 from geometry.mesh.Foil import * # type: ignore
 # Import file for reward computation and mesh deformation
@@ -56,7 +56,28 @@ class airfoil():
         self.write_actions(x,ep) # Saves action(s) to a file, already remapped to physical scale at this stage
 
         name = "object"
-        self.surface = self.create_geometry(x, name, ep)
+        try:
+            self.surface = self.create_geometry(x, name, ep)
+        except Exception as e:
+            raise ValueError(f"ERROR: Geometry creation failed at episode {ep}: {e}. Probable self-intersecting surface, assigning bad reward")
+
+        cfd_path = self.base_folder + '/' + self.output_path + 'cfd'
+
+        with open(cfd_path + "/logCFD.out", "w") as log:
+                subprocess.run(
+                    [
+                        "srun",
+                        "--exclusive",
+                        "-n", str(self.cores),
+                        "-t", str(self.timeout),
+                        str(Path("/home/gsagot/cimlib_CFD_driver")),
+                        "lanceur/Principale.mtc"
+                    ],
+                    cwd=cfd_path,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True
+                )
 
         ## Solve problem using cimlib and move vtu and drag folder
         cmd = (
@@ -64,7 +85,7 @@ class airfoil():
             'cfd && touch run.lock && mpirun -n ' + self.cores + ' --timeout ' + self.timeout +' '
             '' + self.base_folder + '/cimlib_CFD_driver lanceur/Principale.mtc > log.txt 2>&1'
         )
-        os.system(cmd)
+        #os.system(cmd)
         time.sleep(2)
         os.system('cp '+self.base_folder+'/'+self.output_path+'cfd/Resultats/*.txt '+self.base_folder+'/'+self.efforts_path+'.') # Copy the efforts.txt
         os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/Resultats/'+self.dim+'/* '+self.base_folder+'/'+self.vtu_path+'.') # Move vtu.s
