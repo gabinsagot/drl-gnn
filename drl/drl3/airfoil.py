@@ -32,7 +32,7 @@ class airfoil():
 
         # Remap to physical scale:
         self.physical_scale = np.array([0.1, 0.15, 0.2, 0.15, 0.1,      # Camber limits
-                                        0.2, 0.2, 0.2, 0.2, 0.1,        # Thickness limits
+                                        0.2, 0.2, 0.2, 0.2, 0.2,        # Thickness limits
                                         45])                            # Rotation limit
         
         self.bad_rwrd = -50.0
@@ -123,7 +123,6 @@ class airfoil():
             self.write_rewards([self.reward],ep)
 
         reward = self.reward
-        print(f"End of episode {ep} with reward {reward}.", flush=True)
         return reward, conv_actions
 
 
@@ -253,7 +252,7 @@ class airfoil():
             cx0_value, cy0_value = avg_lift_drag(data, plot=False)
         except Exception as e:
             raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
-        sface_penalty = (0.100-self.surface)**2 # Area gap to NACA0010
+        sface_penalty = (0.200-self.surface)**2 # Area gap to NACA0010
         reward = 10*(np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 20*sface_penalty)  # Maximise foil endurance
 
         return reward
