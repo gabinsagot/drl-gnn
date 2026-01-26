@@ -746,4 +746,3 @@ class Foil:
         input = os.path.join(self.msh_dir, f"{self._base()}.msh")
         output = os.path.join(self.t_dir, f"{self._base()}.t")
         return self.convert_gmsh_to_mtc(input, output, False)
-

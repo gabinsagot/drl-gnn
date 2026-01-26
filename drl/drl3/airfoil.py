@@ -35,7 +35,7 @@ class airfoil():
                                         0.2, 0.2, 0.2, 0.2, 0.1,        # Thickness limits
                                         45])                            # Rotation limit
         
-        self.bad_rwrd = -2000
+        self.bad_rwrd = -50.0
         self.cores    = '8'  #num of cores per env 
         self.dim      = '2d'
         self.timeout  = '60'      # timeout limit in seconds (s) -> 1min
@@ -133,7 +133,7 @@ class airfoil():
         # Actions are taken in [-1;1], so transform according to expected action form in apply_xxx foil methods
         # Positive camber values (more or less concave): remap to [0.05, 1]
         actions[:5] = (0.45*actions[:5])+0.55        
-        # Positive thicknesses: remap to [0.75, 1]
+        # Positive thicknesses: remap to [0.05, 1]
         actions[5:10] = (0.45*actions[5:10])+0.55  
 
         # Convert actions
@@ -253,8 +253,8 @@ class airfoil():
             cx0_value, cy0_value = avg_lift_drag(data, plot=False)
         except Exception as e:
             raise ValueError(f"ERROR: Reward computation failed at episode {ep}: {e}.")
-        sface_penalty = (0.065-self.surface)**2 # Area gap to NACA0010
-        reward = np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 100*sface_penalty  # Maximise foil endurance
+        sface_penalty = (0.100-self.surface)**2 # Area gap to NACA0010
+        reward = 10*(np.sign(cy0_value)*np.power(np.abs(cy0_value), 3/2)/cx0_value - 20*sface_penalty)  # Maximise foil endurance
 
         return reward
     
