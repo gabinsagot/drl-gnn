@@ -32,5 +32,13 @@
     <DataSet timestep="30" group="" part="0" file="simu_00004.vtu"/>
     <DataSet timestep="70" group="" part="0" file="simu_00008.vtu"/>
     <DataSet timestep="110" group="" part="0" file="simu_00012.vtu"/>
+    <DataSet timestep="0" group="" part="0" file="simu_00000.vtu"/>
+    <DataSet timestep="30" group="" part="0" file="simu_00004.vtu"/>
+    <DataSet timestep="70" group="" part="0" file="simu_00008.vtu"/>
+    <DataSet timestep="110" group="" part="0" file="simu_00012.vtu"/>
+    <DataSet timestep="0" group="" part="0" file="simu_00000.vtu"/>
+    <DataSet timestep="30" group="" part="0" file="simu_00004.vtu"/>
+    <DataSet timestep="70" group="" part="0" file="simu_00008.vtu"/>
+    <DataSet timestep="110" group="" part="0" file="simu_00012.vtu"/>
   </Collection>
 </VTKFile>
