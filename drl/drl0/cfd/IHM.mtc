@@ -1,10 +1,10 @@
 // ### IO parameters /////////////////////////////////////////////////////
 { Target= Prompt 0 }
 { Target= Prompteur 120000 }
-{ Target= FrequenceStockage_vtk 4 }
+{ Target= FrequenceStockage_vtk 8 }
 
 // ### NS parameters /////////////////////////////////////////////////////
-{ Target= PasDeTemps 10.0 }
+{ Target= PasDeTemps 1 }
 { Target= TempsFin 120.0 }
 { Target= Eta1 0.01 }
 { Target= Rho1 1 }
