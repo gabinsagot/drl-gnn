@@ -38,7 +38,7 @@ class airfoil():
         self.bad_rwrd = -50.0
         self.cores    = '8'  #num of cores per env 
         self.dim      = '2d'
-        self.timeout  = '60'      # timeout limit in seconds (s) -> 1min
+        self.timeout  = '3600'      # timeout limit in seconds (s) -> 1h
 
         self.foil_area = 0.0                        # Airfoil area initialization
 

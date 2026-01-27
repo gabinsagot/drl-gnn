@@ -94,7 +94,7 @@ class Foil:
             self.msh_dir = os.path.join(self.work_dir, "msh")
             self.t_dir   = os.path.join(self.work_dir, "t")
             self.tmp_msh_dir = os.path.join(self.work_dir, "tmp_msh")
-        print(f"geo dir: {self.geo_dir}")
+
         for d in (self.txt_dir, self.geo_dir, self.msh_dir, self.t_dir, self.tmp_msh_dir):
             os.makedirs(d, exist_ok=True)
 
@@ -402,7 +402,7 @@ class Foil:
             raise RuntimeError("gmsh Python API was unable to build .geo file.")
         finally:
             gmsh.finalize()
-        print(f"geo output: {geo_output}")
+
         return geo_output
 
 
