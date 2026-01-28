@@ -367,7 +367,7 @@ def idw(mesh, control_points, init_displacements, p, take_edges=True):
                 control_points = np.vstack((control_points, point))
                 init_displacements = np.vstack((init_displacements, null))
 
-    distances = distance_matrix(mesh, control_points, threshold=1e8)
+
 
     distances = distance_matrix(mesh, control_points, threshold=int(1e8))
     #if there is a 0 in a line, it means the point is a control_point
@@ -558,3 +558,4 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 #     """
 #     Takes a meshed airfoil with control points, moves a point to a corresponding location 
 #     """
+
