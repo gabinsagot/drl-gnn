@@ -22,7 +22,7 @@
 	{ Type= ModeleArithmetique }
 	{ Dependance= 
 		{ Maillage= MaillagePrincipal }
-		{ Champ= AppartientObject }
+		{ Champ= NewAppartientObjet }
 		{ Champ= VectorXi }
 		{ Champ= VectorYi }
 		{ Champ= Zero }
@@ -33,8 +33,8 @@
   	}
 	{ Operation= VectorX = VectorXi }
 	{ Operation= VectorY = VectorYi }
-	{ Operation= VectorX *= AppartientObject }
-	{ Operation= VectorY *= AppartientObject }
+	{ Operation= VectorX *= NewAppartientObjet }
+	{ Operation= VectorY *= NewAppartientObjet }
 }
 
 { CalculCx=

@@ -22,7 +22,9 @@
         { Champ= CompteurTemps } 
         { Champ= Vitesse }
         { Champ= Pression }
-	    { Champ= AppartientObject }  
+	    { Champ= AppartientObject }
+	    { Champ= NewAppartientObjet }          
+	    { Champ= BordNoeud }  
 	    { Champ= AppartientWallIn }  
 	    { Champ= AppartientWallOut }  
 	    { Champ= AppartientWallTop }  
