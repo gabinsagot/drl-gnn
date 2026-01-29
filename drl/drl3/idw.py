@@ -147,9 +147,9 @@ def artificial_cp_bezier(init_foil, new_foil, density):
     x_new = points_new[:,0]
     y_new = points_new[:,1]
 
-    (tck_init, u_init) = splprep([x_init, y_init], s=0.0002, k=3)
+    (tck_init, u_init) = splprep([x_init, y_init], s=0.002, k=3)
     #print("u_init is : ",u_init)
-    (tck_new, u_new) = splprep([x_new, y_new], s=0.0002, k=3)
+    (tck_new, u_new) = splprep([x_new, y_new], s=0.002, k=3)
 
     for i in range(len(points_init)-1):
         # Compute the length of the spline segment created between consecutive points
@@ -216,7 +216,7 @@ def stack(cp, acp):
     stacked_cp = np.array(stacked_cp)
     return stacked_cp
 
-def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 3, a=0.0002):
+def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 6, a=1e-10):
     """
     Returns position of new control points of the mesh, to create new foil's geometry from these points
     
@@ -287,7 +287,7 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         mesh_displacements = displacements
 
     # Move the points in mesh data
-    new_mesh = idw(original_mesh, control_points, displacements, p=6, a=1e-10)
+    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements, p=p, a=a)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
@@ -384,7 +384,6 @@ def extract_points(t_file : str):
         points = np.array(points, dtype=np.float64)
     return points
 
-
 def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     """
     Args :
@@ -443,7 +442,7 @@ def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     end_time = time.perf_counter()
     # print(f"IDW computation time: {end_time - start_time:.4f} seconds")
 
-    return new_mesh            
+    return new_mesh                    
 
 def replace_points(input_t_file_path : str , output_t_file_path : str, new_points):
     """
