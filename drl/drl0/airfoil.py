@@ -22,7 +22,7 @@ class airfoil():
         self.name     = 'airfoil'
         self.base_folder = os.getcwd()
         self.path     = path
-        self.act_size = 11
+        self.act_size = 9
         self.obs_size = self.act_size
         self.obs      = np.zeros(self.obs_size)
         self.shape_h  = 1.0
@@ -278,4 +278,14 @@ class airfoil():
             data_str = ' '.join( [str(ep)] + [str(val) for val in rewards] )
             file.write(data_str + '\n')
         return('done writing rewards of env '+str(ep)+' in file')
-    
+
+
+filepath = os.path.dirname(os.path.abspath(__file__))
+pbo = airfoil(filepath)
+
+actions = np.array([
+        0.0542620954615786, 0.10663980402426546, 0.05713377006566389, 0.08970412611507958, 0.07016681416639436,    #camber
+        0.07519298958246255, 0.10940441888406632, 0.051012872727807204,                  #thickness
+        0.0                           #rotation
+])
+pbo.create_geometry(actions, "object", 0, plot = True, naca0010 = False)

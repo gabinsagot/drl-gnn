@@ -238,15 +238,10 @@ class Foil:
         Returns :
             None
         """
-        N = (len(actions)-1)//2
-        #print(f"N = {N}")
-        #The new foil will have len(self.points) = 2*(N+1)
-        camber = actions[:N] #camber is of length N
-        #print(f"Camber = {camber}, {np.shape(camber)}")
-        thickness = actions[N:-1] #thickness is of length N
-        #print(f"Thickness = {thickness}, {np.shape(thickness)}")
+        N = (len(actions)-1)//2 # N = 4
+        camber = actions[:N+1] #camber is of length N+1
+        thickness = actions[N+1:-1] #thickness is of length N-1
         rotation = actions[-1]
-        #print(f"Rotation = {rotation}")
         origin = self.origin
 
 
@@ -258,23 +253,22 @@ class Foil:
             raise ValueError("Camber is too large, larger than the number of control points")
         if len(camber) < origin-1 :
             raise ValueError("Camber is too short, shorter than the number of control points")
-        if len(thickness) > origin-1 :
+        if len(thickness) > 3 :
             raise ValueError("Thickness is too large, larger than the number of control points")
-        if len(thickness) < origin-1 :
+        if len(thickness) < 3 :
             raise ValueError("Thickness is too short, shorter than the number of control points")
         try:
-            for i in range(N):
+            for i in range(N+1):
                 
                 c = camber[i]
-                #print(f"Camber {i} : {c}")
+                if i == 0 or i==N:
+                    new_points[i+1, 1] += c
+                    new_points[-(i+3), 1] += c
+                else:
+                    t = thickness[i-1]
 
-                t = thickness[i]
-                #print(f"Thickness {i} : {t}")
-
-                new_points[i+1, 1] = c + t/2
-                new_points[-(i+3), 1] = c - t/2
-                #print(f'Initial point {i+1} of coordinates {points[i+1, 1]} moved to {new_points[i+1, 1]}')
-                #print(f'Initial point {-(i+3)%len(points)} of coordinates {points[-(i+3), 1]} moved to {new_points[-(i+3), 1]}')
+                    new_points[i+1, 1] = c + t/2
+                    new_points[-(i+3), 1] = c - t/2
 
         except ValueError as e:
             print(f"Error: {e}")

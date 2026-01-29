@@ -22,7 +22,7 @@ class airfoil():
         self.name     = 'airfoil'
         self.base_folder = os.getcwd()
         self.path     = path
-        self.act_size = 11
+        self.act_size = 9
         self.obs_size = self.act_size
         self.obs      = np.zeros(self.obs_size)
         self.shape_h  = 1.0
@@ -31,11 +31,11 @@ class airfoil():
         self.x_0      = np.array([np.random.rand((1)) for i in range(self.act_size)])   # initial action
 
         # Remap to physical scale:
-        self.physical_scale = np.array([0.1, 0.15, 0.2, 0.15, 0.1,      # Camber limits
-                                        0.05, 0.2, 0.2, 0.2, 0.2,        # Thickness limits
+        self.physical_scale = np.array([0.1, 0.15, 0.15, 0.15, 0.1,      # Camber limits
+                                        0.2, 0.2, 0.2,                  # Thickness limits (everything except close to trailing and leading edge)
                                         45])                            # Rotation limit
         
-        self.bad_rwrd = -50.0
+        self.bad_rwrd = -10.0
         self.cores    = '8'  #num of cores per env 
         self.dim      = '2d'
         self.timeout  = '3600'      # timeout limit in seconds (s) -> 1h
@@ -49,12 +49,14 @@ class airfoil():
     def cfd_solve(self, x, ep):
 
         ## Create folders and copy cfd folder
-        self.output_path       = self.path+'/'+str(ep)+'/'
-        self.vtu_path          = self.output_path+'/vtu/'
+        self.output_path    = self.path+'/'+str(ep)+'/'
+        self.vtu_path       = self.output_path+'/vtu/'
         self.efforts_path   = self.output_path+'Efforts/'
+        self.geometries_path       = self.output_path+'/geometries/'
 
         os.makedirs(self.vtu_path, exist_ok= True)
         os.makedirs(self.efforts_path, exist_ok= True)
+        os.makedirs(self.geometries_path, exist_ok= True)
         os.system('cp -r cfd ' + self.base_folder + '/' + self.output_path + '.')
 
         self.write_actions(x,ep) # Saves action(s) to a file, already remapped to physical scale at this stage
@@ -96,7 +98,11 @@ class airfoil():
         time.sleep(2)
         os.system('cp '+self.base_folder+'/'+self.output_path+'cfd/Resultats/*.txt '+self.base_folder+'/'+self.efforts_path+'.') # Copy the efforts.txt
         os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/Resultats/'+self.dim+'/* '+self.base_folder+'/'+self.vtu_path+'.') # Move vtu.s
+        os.system('mv '+self.base_folder+'/geometry/mesh/' + str(ep) + '/geo/* '+self.base_folder+'/'+self.geometries_path+'.') # Move object.geo
+        os.system('mv '+self.base_folder+'/'+self.output_path+'cfd/meshes/* '+self.base_folder+'/'+self.geometries_path+'.') # Move object.t, .geo and domain.t
+
         os.system('rm -r '+self.base_folder+'/'+self.output_path+'cfd') # Remove the copied cfd folder
+        os.system('rm -r '+self.base_folder+'/geometry/mesh/' + str(ep)) # Remove the episode folder in geometry
 
         # Reward
         self.reward = self.compute_reward()
@@ -133,9 +139,9 @@ class airfoil():
         # Positive camber values (more or less concave): remap to [0.05, 1]
         actions[:5] = (0.45*actions[:5])+0.55        
         # Positive thicknesses: remap to [0.05, 1]
-        actions[5:10] = (0.45*actions[5:10])+0.55  
+        actions[5:-1] = (0.45*actions[5:-1])+0.55  
         # Negative rotation to generate lift
-        actions[10] = 0.5*(actions[10]-1.0)
+        actions[-1] = 0.5*(actions[-1]-1.0)
         # Convert actions
         #print("Actions remapped avant physical scale : ", actions)
         conv_actions  = np.multiply(actions, self.physical_scale)
@@ -199,7 +205,7 @@ class airfoil():
         naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
 
         # Deform the original domain with IDW according to actions and control points position
-        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", p = 3)
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", density=1000, p = 3.5)
         # Get every new control points & give it to foil.points()
         foil.points = control_points
 

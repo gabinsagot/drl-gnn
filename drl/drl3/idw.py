@@ -3,7 +3,7 @@ import numpy as np
 import time
 from scipy.spatial import distance_matrix
 from scipy.interpolate import splprep, splev
-import shutil
+from collections import Counter
 import os
 from pathlib import Path
 
@@ -132,17 +132,7 @@ def artificial_cp_spline(init_foil, new_foil, density = 100, k=2):
         acp_displacements_partial = new_acp_partial - init_acp_partial
         acp_displacements.append(acp_displacements_partial)
         init_acp.append(init_acp_partial)
-
-        # print(f"Loop for {i+1}th spline running")
-        # print("Longueur spline new : ", length_new)
-        # print("Nombre de acp à ajouter spline new : ", n)
-        # print(new_point_i, "   ", new_point_ip1)
-        # print("Paramètres 0 à 1 de spline new : ", new_acp_u)
-
-        # print("init_acp {i+1}th spline : ", init_acp_partial)
-        # print("new_acp {i+1}th spline : ", new_acp_partial)
-
-    #print("Artificial control points displacement :", acp_displacements)            
+                
     return init_acp, acp_displacements
 
 def artificial_cp_bezier(init_foil, new_foil, density):
@@ -157,9 +147,9 @@ def artificial_cp_bezier(init_foil, new_foil, density):
     x_new = points_new[:,0]
     y_new = points_new[:,1]
 
-    (tck_init, u_init) = splprep([x_init, y_init], s=0.002, k=3)
+    (tck_init, u_init) = splprep([x_init, y_init], s=0.0002, k=3)
     #print("u_init is : ",u_init)
-    (tck_new, u_new) = splprep([x_new, y_new], s=0.002, k=3)
+    (tck_new, u_new) = splprep([x_new, y_new], s=0.0002, k=3)
 
     for i in range(len(points_init)-1):
         # Compute the length of the spline segment created between consecutive points
@@ -228,7 +218,7 @@ def stack(cp, acp):
 
 def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 3):
     """
-    Returns the path (str) to new domain.t deformed according to IDW
+    Returns position of new control points of the mesh, to create new foil's geometry from these points
     
     Deforms the original NACA0010 mesh according to any deformation between init_naca and end_naca Foil objects.
 
@@ -248,7 +238,6 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
     # Select control points, including artificial ones
     init_cp = init_naca.points
     init_cp = np.array(init_cp)
-    order_points(init_cp)
     new_cp = end_naca.points
     new_cp = np.array(new_cp)
 
@@ -264,39 +253,47 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
     if interp_type == "spline":
         init_acp, acp_displacements = artificial_cp_spline(init_naca, end_naca, density, k=2)
         # Intercaler chaque acp entre les cp initiaux
-        foil_cp = stack(init_cp, init_acp)
-        control_points = get_closest_point(foil_cp, original_mesh)
-        control_points = np.array(control_points) # No need to order here thanks to stack method
+        init_foil_cp = stack(init_cp, init_acp)
+        mesh_control_points = get_closest_point(init_foil_cp, original_mesh)
+        mesh_control_points = np.array(mesh_control_points) # No need to order here thanks to stack method
 
         displacements = stack(init_displacements, acp_displacements)
+        mesh_displacements = displacements
 
     if interp_type == "bezier":
-        init_acp, acp_displacements = artificial_cp_bezier(init_naca, end_naca, density = 100)
-        foil_cp = init_acp
-        control_points = get_closest_point(foil_cp, original_mesh)
-        control_points = np.array(control_points)
+        init_cp, displacements = artificial_cp_bezier(init_naca, end_naca, density = density)
+        init_foil_cp = init_cp
 
-        displacements = acp_displacements
-        # print("All control points displacements with Bézier interpolation : ", displacements)
+        # TODO : modify get_unq pour avoir les init_foil_cp et end_foil_cp en unique aussi
+        mesh_control_points = get_closest_point(init_foil_cp, original_mesh)
+        mesh_control_points = np.array(mesh_control_points)
+
+        # New mesh points = points of new foil
+        new_foil_points = init_foil_cp + displacements
+        mesh_displacements = new_foil_points - mesh_control_points
+
+        # orig = init_naca.origin
+        # print("Displacements autour de l'origine : ", displacements[orig-15:orig+16], flush=True)
 
     if interp_type == "linear":
         init_acp, acp_displacements = artificial_cp_linear(init_naca, end_naca, n=2)
 
-        foil_cp = np.vstack((init_cp, init_acp))
-        control_points = get_closest_point(foil_cp, original_mesh)
-        control_points = np.array(control_points)
+        init_foil_cp = np.vstack((init_cp, init_acp))
+        mesh_control_points = get_closest_point(init_foil_cp, original_mesh)
+        mesh_control_points = np.array(mesh_control_points)
 
         # Order control points by trigonometric angle
         displacements = np.vstack((init_displacements, acp_displacements))
+        mesh_displacements = displacements
 
     # Move the points in mesh data
-    new_mesh = idw(original_mesh, control_points, displacements, p)
+    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements, p)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
     replace_points(input_t_file_path, output_t_file_path, new_mesh)
 
-    return foil_cp + displacements
+    return init_foil_cp + displacements # type: ignore
 
 
 def get_closest_point(points, mesh):
@@ -318,6 +315,56 @@ def get_closest_point(points, mesh):
     # print("Points les + proches : ", closest_points)
 
     return closest_points
+
+def get_closest_point_unq(points, displacements, mesh):
+    """
+    Finds in mesh the closest points from those in points.
+    Deletes in points, displacements and closest_points points appearing multiple times
+
+    Args: 
+        point: np.ndarray of shape (M,2)
+        mesh: np.ndarray of shape (N, 2)
+
+    Returns control points displacements and closest_points in mesh without redundancy
+    """
+    closest_points = []
+    cp_displ_unq = []
+    msh_closest_unq = []
+
+    counter = {}
+    for i in range(len(points)) :
+        distances = np.linalg.norm(mesh - points[i], axis=1)
+        closest_index = np.argmin(distances)
+        closest_point = mesh[closest_index]
+        closest_points.append(closest_point)
+        counter[tuple(closest_point)] = counter.get(tuple(closest_point), 0) + 1
+
+    closest_points = np.array(closest_points)
+
+    # Check redundancy in closest_points
+    for mesh_point in counter:
+        n = counter[mesh_point] 
+        mesh_point = np.array(mesh_point)
+        # Get the index at which the mesh point appear several times
+        occurences = np.where((closest_points == mesh_point).all(axis=1))[0]
+
+        if n > 1:
+            # Delete in closest_points to have unique values
+            sum_disp = 0
+            for i in range(1,n):
+                sum_disp += displacements[occurences[i]]
+            mean_disp = sum_disp/n
+            # Assign the mean displacemnts to the unique mesh point concerned, which is the closest from multiple control points
+            cp_displ_unq.append(mean_disp)
+        else:
+            # If only one closest point, assign it's displacement
+            cp_displ_unq.append(displacements[occurences[0]])
+        msh_closest_unq.append(mesh_point)
+
+    msh_closest_unq = np.array(msh_closest_unq)
+    cp_displ_unq = np.array(cp_displ_unq)
+
+    return msh_closest_unq, cp_displ_unq
 
 def extract_points(t_file : str):
     """
@@ -366,8 +413,6 @@ def idw(mesh, control_points, init_displacements, p, take_edges=True):
             if is_edge(point):
                 control_points = np.vstack((control_points, point))
                 init_displacements = np.vstack((init_displacements, null))
-
-
 
     distances = distance_matrix(mesh, control_points, threshold=int(1e8))
     #if there is a 0 in a line, it means the point is a control_point
@@ -558,4 +603,3 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 #     """
 #     Takes a meshed airfoil with control points, moves a point to a corresponding location 
 #     """
-
