@@ -199,7 +199,7 @@ class airfoil():
         naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
 
         # Deform the original domain with IDW according to actions and control points position
-        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", p = 3)
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", density = 100, p=6, a=0.0002)
         # Get every new control points & give it to foil.points()
         foil.points = control_points
 
