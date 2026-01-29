@@ -1,5 +1,5 @@
 import numpy as np
 
-L1 = np.array([[1, 2], [3]])
+L1 = np.array([1, 2, 3])
 
-print(np.stack(L1))
+print(L1 + 1)

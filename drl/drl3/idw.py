@@ -216,7 +216,7 @@ def stack(cp, acp):
     stacked_cp = np.array(stacked_cp)
     return stacked_cp
 
-def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 3):
+def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 3, a=0.0002):
     """
     Returns position of new control points of the mesh, to create new foil's geometry from these points
     
@@ -287,7 +287,7 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         mesh_displacements = displacements
 
     # Move the points in mesh data
-    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements, p)
+    new_mesh = idw(original_mesh, control_points, displacements, p=6, a=1e-10)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
@@ -385,7 +385,7 @@ def extract_points(t_file : str):
     return points
 
 
-def idw(mesh, control_points, init_displacements, p, take_edges=True):
+def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     """
     Args :
         mesh : np.ndarray of shape (N, 2)
@@ -420,7 +420,9 @@ def idw(mesh, control_points, init_displacements, p, take_edges=True):
     # compute inverse-distance weights, handling zeros so that a row with a control point
     # becomes one-hot (1 for coincident control(s), 0 for others)
     with np.errstate(divide='ignore', invalid='ignore'):
-        weights = 1.0 / (distances ** p)
+        p = 6
+        a = 1e-15
+        weights = 1 / (distances**p + a)
 
     zero_mask = (distances == 0)
     if zero_mask.any():
