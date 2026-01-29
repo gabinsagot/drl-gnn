@@ -26,6 +26,9 @@
 	  { Modele= DefinitionObject }
       { Modele= GeoObject }
 	  { Modele= DistanceObject }
+
+	  { Modele= DistanceNaca }
+
 	  { Modele= Corners }
 	  { Modele= NodeType }
     }
@@ -402,6 +405,38 @@
 	}
 }
 
+
+{ DistanceNaca=
+	{ Type= ModeleArithmetique }
+		{ Data=
+			{ Champ= 
+				{ Type= P1_Scalaire_Par }
+				{ Nom= NewAppartientObjet }
+				{ Data= ValeurItem 1 0.0 }                        // ##
+			}
+		}
+	{ Operation= NewAppartientObjet = BordNoeud }
+	{ Operation= NewAppartientObjet -= AppartientWallIn }
+	{ Operation= NewAppartientObjet -= AppartientWallOut }
+	{ Operation= NewAppartientObjet -= AppartientWallTop }
+	{ Operation= NewAppartientObjet -= AppartientWallBottom }
+	{ Operation= NewAppartientObjet >? Zero }
+
+	{ DependanceModifiable=
+		{ Champ= NewAppartientObjet }
+	}
+
+	{ Dependance=
+        { Maillage= MaillagePrincipal }
+        { Champ= AppartientWallIn }
+		{ Champ= AppartientWallOut }
+		{ Champ= AppartientWallTop }
+		{ Champ= AppartientWallBottom }
+		{ Champ= BordNoeud }
+		{ Champ= Zero }
+	}
+}
+
 /////////////////////////////////////////////////////
 ////////// NODE TYPE (FOR GNN) //////////////////////
 /////////////////////////////////////////////////////
@@ -417,6 +452,7 @@
 	{ Dependance=
 		{ Maillage= MaillagePrincipal }
 		{ Champ= AppartientObject }
+		{ Champ= NewAppartientObjet }
 		{ Champ= AppartientWallIn }
 		{ Champ= AppartientWallOut }
 		{ Champ= AppartientWallBottom }
@@ -463,6 +499,7 @@
 	{ Dependance=
 		{ Maillage= MaillagePrincipal }
 		{ Champ= AppartientObject }
+		{ Champ= NewAppartientObjet }
 		{ Champ= AppartientWallIn }
 		{ Champ= AppartientWallOut }
 		{ Champ= AppartientWallBottom }

@@ -52,7 +52,8 @@
             { Degres= Un Un Zero }
             { Valeurs= Zero Zero Zero }
             { Priorite= 0 }
-        } 
+        }
+
     }  
     { Precision= PrecisionFrontieres }
     { Dependance=
@@ -62,6 +63,7 @@
         { Champ= AppartientWallOut }
         { Champ= AppartientWallTop }
         { Champ= AppartientObject }
+		{ Champ= NewAppartientObjet }
         { Champ= PrecisionFrontieres }
         { Champ= Un }
         { Champ= Zero }			
