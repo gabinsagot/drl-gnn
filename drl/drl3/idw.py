@@ -216,7 +216,7 @@ def stack(cp, acp):
     stacked_cp = np.array(stacked_cp)
     return stacked_cp
 
-def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, a=3, b=5):
+def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, a=3, b=5, epsilon = 1e-15):
     """
     Returns position of new control points of the mesh, to create new foil's geometry from these points
     
@@ -287,7 +287,7 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         mesh_displacements = displacements
 
     # Move the points in mesh data
-    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements)
+    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements, a=a, b=b, epsilon=epsilon)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
     output_t_file_path = os.path.join(f"domain/a={a}_b={b}.t")
@@ -384,7 +384,7 @@ def extract_points(t_file : str):
         points = np.array(points, dtype=np.float64)
     return points
 
-def old_idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
+def old_idw(mesh, control_points, init_displacements, p, a=1e-10, take_edges=True):
     """
     Args :
         mesh : np.ndarray of shape (N, 2)
@@ -420,7 +420,7 @@ def old_idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=Tr
     # becomes one-hot (1 for coincident control(s), 0 for others)
     with np.errstate(divide='ignore', invalid='ignore'):
 
-        weights = (L / distances)**a + (alpha*L / distances)**b
+        weights = 1 / (distances**p + a)
 
     zero_mask = (distances == 0)
     if zero_mask.any():
@@ -443,7 +443,7 @@ def old_idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=Tr
 
     return new_mesh  
 
-def multistep_idw(mesh, control_points, init_displacements, n, p, a=0.0002, take_edges=True):
+def multistep_idw(mesh, control_points, init_displacements, n, a=3, b=5, epsilon = 1e-15, take_edges=True):
     """
     Splits the init_displacements into n fractions, and performs n successive IDWs
     This allows for a more gradual transformation of the mesh, and might avoid compenetration. 
@@ -456,12 +456,10 @@ def multistep_idw(mesh, control_points, init_displacements, n, p, a=0.0002, take
         p : power parameter for inverse-distance weighting
     """
     partial_displacements = init_displacements / n
-    for i in range(n):
+    for _ in range(n):
         # Perform IDW for this step
-        mesh = idw(mesh, control_points, partial_displacements, p, a, take_edges)
+        mesh = idw(mesh, control_points, partial_displacements, a=a, b=b, epsilon = epsilon, alpha=0.5, L=1, take_edges=take_edges)
         control_points += partial_displacements
-
-
     return mesh
 
 
@@ -496,7 +494,7 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 
     return new_file
 
-def idw(mesh, control_points, init_displacements, a=3, b=5, alpha=0.5, L=1, take_edges=True):
+def idw(mesh, control_points, init_displacements, a=3, b=5, epsilon = 1e-15, alpha=0.5, L=1, take_edges=True):
     """
     Args :
         mesh : np.ndarray of shape (N, 2)
@@ -531,7 +529,7 @@ def idw(mesh, control_points, init_displacements, a=3, b=5, alpha=0.5, L=1, take
     # compute inverse-distance weights, handling zeros so that a row with a control point
     # becomes one-hot (1 for coincident control(s), 0 for others)
     with np.errstate(divide='ignore', invalid='ignore'):
-        weights = (L / distances)**a + (alpha*L / distances)**b
+        weights = (L / distances)**a + (alpha*L / (distances + epsilon))**b
 
     zero_mask = (distances == 0)
     if zero_mask.any():
