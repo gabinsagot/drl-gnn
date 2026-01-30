@@ -23,6 +23,7 @@
         { Champ= Vitesse }
         { Champ= Pression }
 	    { Champ= AppartientObject }  
+        { Champ = BordNoeud }
 	    { Champ= AppartientWallIn }  
 	    { Champ= AppartientWallOut }  
 	    { Champ= AppartientWallTop }  

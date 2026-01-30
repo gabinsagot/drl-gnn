@@ -205,7 +205,7 @@ class airfoil():
         naca0010_foil.apply_translation(x_trans_domain, y_trans_domain) # Translate it where the boundary layer mesh is originally
 
         # Deform the original domain with IDW according to actions and control points position
-        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", density = 100, p=6, a=1e-10)
+        control_points = compute_idw_mesh(naca0010_foil, foil, ep, self.base_folder, self.path, interp_type="bezier", density=100, a=4, b=20)
         # Get every new control points & give it to foil.points()
         foil.points = control_points
 
@@ -284,4 +284,13 @@ class airfoil():
             data_str = ' '.join( [str(ep)] + [str(val) for val in rewards] )
             file.write(data_str + '\n')
         return('done writing rewards of env '+str(ep)+' in file')
-    
+
+TEST = 0
+if TEST:
+    filepath = os.path.dirname(os.path.abspath(__file__))
+    pbo = airfoil(filepath)
+
+    actions = np.array([0.07393572788047696, 0.10259171955246423, 0.07976575955450085, 0.09292366147754853, 0.03365477949979893, 
+                        0.1250101399762668, 0.09467010885079771, 0.08328714759205409, 
+                        -7.191928319276225])
+    pbo.create_geometry(actions, "test_idw_10", ep=0, plot = True, naca0010 = False)
