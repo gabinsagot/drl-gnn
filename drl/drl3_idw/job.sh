@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=drl3_100
+#SBATCH --job-name=drl3_idw
 #SBATCH --output=log.out
 #SBATCH --error=log.err
 #SBATCH --partition=MAIN
