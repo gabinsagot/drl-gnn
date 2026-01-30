@@ -216,7 +216,7 @@ def stack(cp, acp):
     stacked_cp = np.array(stacked_cp)
     return stacked_cp
 
-def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, p = 6, a=1e-10):
+def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_results : str, interp_type = "bezier", density = 100, a=3, b=5):
     """
     Returns position of new control points of the mesh, to create new foil's geometry from these points
     
@@ -287,10 +287,10 @@ def compute_idw_mesh(init_naca, end_naca, ep : int, base_folder : str, path_to_r
         mesh_displacements = displacements
 
     # Move the points in mesh data
-    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements, p=p, a=a)
+    new_mesh = idw(original_mesh, mesh_control_points, mesh_displacements)
     # Write new .t file at the right location
     input_t_file_path = os.path.join(base_folder, "domain/domain_naca0010_12_4.t")
-    output_t_file_path = os.path.join(base_folder, path_to_results, str(ep), "cfd", "meshes", "domain.t")
+    output_t_file_path = os.path.join(f"domain/a={a}_b={b}.t")
     replace_points(input_t_file_path, output_t_file_path, new_mesh)
 
     return init_foil_cp + displacements # type: ignore
@@ -384,7 +384,7 @@ def extract_points(t_file : str):
         points = np.array(points, dtype=np.float64)
     return points
 
-def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
+def old_idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     """
     Args :
         mesh : np.ndarray of shape (N, 2)
@@ -419,9 +419,8 @@ def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     # compute inverse-distance weights, handling zeros so that a row with a control point
     # becomes one-hot (1 for coincident control(s), 0 for others)
     with np.errstate(divide='ignore', invalid='ignore'):
-        p = 6
-        a = 1e-15
-        weights = 1 / (distances**p + a)
+
+        weights = (L / distances)**a + (alpha*L / distances)**b
 
     zero_mask = (distances == 0)
     if zero_mask.any():
@@ -442,7 +441,29 @@ def idw(mesh, control_points, init_displacements, p, a=0.0002, take_edges=True):
     end_time = time.perf_counter()
     # print(f"IDW computation time: {end_time - start_time:.4f} seconds")
 
-    return new_mesh                    
+    return new_mesh  
+
+def multistep_idw(mesh, control_points, init_displacements, n, p, a=0.0002, take_edges=True):
+    """
+    Splits the init_displacements into n fractions, and performs n successive IDWs
+    This allows for a more gradual transformation of the mesh, and might avoid compenetration. 
+
+    Args: 
+        mesh : np.ndarray of shape (N, 2)
+        control_points : np.ndarray of shape (M, 2)
+        init_displacements : np.ndarray of shape (M, 2)
+        n : int, number of steps for the multistep IDW
+        p : power parameter for inverse-distance weighting
+    """
+    partial_displacements = init_displacements / n
+    for i in range(n):
+        # Perform IDW for this step
+        mesh = idw(mesh, control_points, partial_displacements, p, a, take_edges)
+        control_points += partial_displacements
+
+
+    return mesh
+
 
 def replace_points(input_t_file_path : str , output_t_file_path : str, new_points):
     """
@@ -475,6 +496,63 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 
     return new_file
 
+def idw(mesh, control_points, init_displacements, a=3, b=5, alpha=0.5, L=1, take_edges=True):
+    """
+    Args :
+        mesh : np.ndarray of shape (N, 2)
+        control_points : np.ndarray of shape (M, 2)
+        init_displacements : np.ndarray of shape (M, 2)
+        p : power parameter for inverse-distance weighting
+
+    Returns :
+        new_mesh : np.ndarray of shape (N, 2)
+    """
+    start_time = time.perf_counter()
+
+    H = max(mesh, key=lambda x: x[1])[1]  # hauteur
+    l = max(mesh, key=lambda x: x[0])[0]  # largeur (max x)
+    null = np.array([0.0, 0.0])
+
+    
+    def is_edge(point):
+        x, y = point[0], point[1]
+        # use isclose to avoid floating-point equality issues
+        return np.isclose(x, 0.0) or np.isclose(y, 0.0) or np.isclose(x, l) or np.isclose(y, H)
+    
+    if take_edges:
+        for point in mesh:
+            if is_edge(point):
+                control_points = np.vstack((control_points, point))
+                init_displacements = np.vstack((init_displacements, null))
+
+    distances = distance_matrix(mesh, control_points, threshold=int(1e8))
+    #if there is a 0 in a line, it means the point is a control_point
+    #In this case, we can use the control point's displacement directly
+    # compute inverse-distance weights, handling zeros so that a row with a control point
+    # becomes one-hot (1 for coincident control(s), 0 for others)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        weights = (L / distances)**a + (alpha*L / distances)**b
+
+    zero_mask = (distances == 0)
+    if zero_mask.any():
+        # clear any inf/NaN produced by division by zero
+        weights[zero_mask] = 0.0
+        # for rows that contain one or more exact matches, set the row to the mask (1.0 where match)
+        rows_with_zero = zero_mask.any(axis=1)
+        weights[rows_with_zero] = zero_mask[rows_with_zero].astype(np.float64)
+
+    #make weights sum to 1
+    weights /= weights.sum(axis=1, keepdims=True)
+
+    displacements = weights @ init_displacements
+    new_mesh = mesh + displacements
+    #displacements is of shape (N, 2). We need to create a list of np.ndarrays of shape (2,)
+    #print(displacements)
+
+    end_time = time.perf_counter()
+    # print(f"IDW computation time: {end_time - start_time:.4f} seconds")
+
+    return new_mesh  
 
 #TESTS
 # TEST1 = 0
@@ -547,56 +625,59 @@ def replace_points(input_t_file_path : str , output_t_file_path : str, new_point
 #     check = extract_points('idw/domain_idw.t')
 #     print(f"In {file}, line {i_1} = {check[i_1]}, line {i_2} = {check[i_2]}")
 
-# TEST3 = 0
-# if TEST3:
-#     file = 'limace'
-#     L = extract_points('../idw/limace.t')
-#     print("Points extracted.")
-#     i_1 = 9529
-#     i_2 = 100
-#     print(f"In {file}.t, line {i_1} = {L[i_1]}, line {i_2} = {L[i_2]}")
+TEST3 = 0
+if TEST3:
+    n = 10
+    file = 'domain/domain_naca0010_12_4.t'
+    file_idw = f'test_new_idw.t'
+    L = extract_points(file)
+    print("Points extracted.")
+    i_1 = 9529
+    i_2 = 100
+    print(f"In {file}.t, line {i_1} = {L[i_1]}, line {i_2} = {L[i_2]}")
 
-#     null = np.array([0.0, 0.0])
-#     shift = np.array([0.0, 0.06])
-#     control_points = []
-#     displ = []
+    null = np.array([0.0, 0.0])
+    shift = np.array([0.0, 0.5])
+    control_points = []
+    displ = []
 
-#     control_points.append(L[9529])
+    control_points.append(L[9529])
 
-#     print(f"Control points : {len(control_points)}")
+    print(f"Control points : {len(control_points)}")
 
-#     displ.append(shift)
+    displ.append(shift)
 
-#     print(f"Displacements : {len(displ)}")
+    print(f"Displacements : {len(displ)}")
 
-#     control_points = np.array(control_points)
-#     displ = np.array(displ)
-#     new_points = idw(L, control_points, displ, p=3.5)
-
-#     # show full precision in console
-
-#     print(".\n.\n.\nTransformation done.")
-#     #print(new_points, len(new_points))
-#     print(f"{len(new_points)} points.") 
-
-#     print(f"In new_points, line {i_1} = {new_points[i_1]}, line {i_2} = {new_points[i_2]}")
-#     file = replace_points('../idw/limace.t', '../idw/limace_idw.t', new_points)
+    control_points = np.array(control_points)
+    displ = np.array(displ)
     
-#     print(f".\n.\n.\nFile written: {file}")
-#     check = extract_points('../idw/limace_idw.t')   
-#     print(f"In {file}, line {i_1} = {check[i_1]}, line {i_2} = {check[i_2]}")
+    new_points = idw(L, control_points, displ, p=4)
 
-#     #move idw/limace.t into cfd_ex, and rename it test.t
-#     src = Path(file)  # 'file' was set earlier to 'idw/limace_idw.t'
-#     dest_dir = Path('../idw/cfd_ex/meshes')
+    # show full precision in console
+
+    print(".\n.\n.\nTransformation done.")
+    #print(new_points, len(new_points))
+    print(f"{len(new_points)} points.") 
+
+    print(f"In new_points, line {i_1} = {new_points[i_1]}, line {i_2} = {new_points[i_2]}")
+    file = replace_points(file, file_idw, new_points)
+
+    print(f".\n.\n.\nFile written: {file}")
+    check = extract_points(file_idw)   
+    print(f"In {file}, line {i_1} = {check[i_1]}, line {i_2} = {check[i_2]}")
+
+    # #move idw/limace.t into cfd_ex, and rename it test.t
+    # src = Path(file)  # 'file' was set earlier to 'idw/limace_idw.t'
+    # dest_dir = Path('../idw/cfd_ex/meshes')
     
-#     dest = dest_dir / 'test.t'
+    # dest = dest_dir / 'test.t'
 
-#     try:
-#         shutil.move(str(src), str(dest))
-#         print(f"Moved '{src}' -> '{dest}'")
-#     except Exception as e:
-#         print(f"Failed to move '{src}' -> '{dest}': {e}")
+    # try:
+    #     shutil.move(str(src), str(dest))
+    #     print(f"Moved '{src}' -> '{dest}'")
+    # except Exception as e:
+    #     print(f"Failed to move '{src}' -> '{dest}': {e}")
 
 
 # TEST4=0
